@@ -1,0 +1,51 @@
+:80 {
+    # Set root directory
+    root * /var/www/html
+
+    # PHP-FPM configuration for Nextcloud
+    php_fastcgi nextcloud:9000 {
+        env front_controller_active true
+    }
+
+    # File server for static files
+    file_server
+
+    # Headers for security
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+
+    # Rewrite rules for Nextcloud
+    @forbidden {
+        path /.htaccess
+        path /data/*
+        path /config/*
+        path /db_structure
+        path /.xml
+        path /README
+        path /3rdparty/*
+        path /lib/*
+        path /templates/*
+        path /occ
+        path /console.php
+    }
+    respond @forbidden 404
+
+    # WebDAV and CalDAV redirects
+    redir /.well-known/carddav /remote.php/dav 301
+    redir /.well-known/caldav /remote.php/dav 301
+    redir /.well-known/webfinger /index.php/.well-known/webfinger 301
+    redir /.well-known/nodeinfo /index.php/.well-known/nodeinfo 301
+
+    # Log
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}

@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for Nextcloud
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=nextcloud
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    networks:
+      - internal
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    networks:
+      - internal
+
+  # Nextcloud application
+  nextcloud:
+    image: nextcloud:stable-fpm-alpine
+    restart: unless-stopped
+    volumes:
+      - nextcloud_data:/var/www/html
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_DB=nextcloud
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_HOST_PASSWORD=${REDIS_PASSWORD}
+      - NEXTCLOUD_TRUSTED_DOMAINS=${NEXTCLOUD_DOMAIN}
+      - TRUSTED_PROXIES=caddy
+      - OVERWRITEPROTOCOL=https
+      - OVERWRITEHOST=${NEXTCLOUD_DOMAIN}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - internal
+
+  # Caddy reverse proxy
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - nextcloud_data:/var/www/html:ro
+    environment:
+      - NEXTCLOUD_DOMAIN=${NEXTCLOUD_DOMAIN}
+    depends_on:
+      - nextcloud
+    networks:
+      - internal
+      - external-services
+
+  # Cloudflare Tunnel
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - internal
+      - external-services
+    depends_on:
+      - caddy
+
+volumes:
+  db_data:
+  nextcloud_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+  external-services:
+    external: true
+    name: external-services
