@@ -75,9 +75,29 @@ services:
 
 volumes:
   db_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/lab-nextcloud/db
   nextcloud_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/lab-nextcloud/nextcloud
   caddy_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/lab-nextcloud/caddy_data
   caddy_config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/lab-nextcloud/caddy_config
 
 networks:
   internal:

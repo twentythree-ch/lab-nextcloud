@@ -21,6 +21,11 @@ This repository contains a Docker Compose stack for running Nextcloud with a Clo
 2. Existing `external-services` network (already created on your host)
 3. Cloudflare account with a domain configured
 4. Cloudflare Tunnel created
+5. Create the data directory on your host:
+   ```bash
+   mkdir -p /data/lab-nextcloud/{db,nextcloud,caddy_data,caddy_config}
+   chmod -R 755 /data/lab-nextcloud
+   ```
 
 ## Setup Instructions
 
@@ -158,10 +163,11 @@ Then redeploy through Portainer.
 
 ## Backup Strategy
 
-Important directories to backup:
-- PostgreSQL data: `db_data` volume
-- Nextcloud files: `nextcloud_data` volume
-- Caddy certificates: `caddy_data` volume
+Important directories to backup on your host system:
+- PostgreSQL data: `/data/lab-nextcloud/db`
+- Nextcloud files: `/data/lab-nextcloud/nextcloud`
+- Caddy certificates: `/data/lab-nextcloud/caddy_data`
+- Caddy config: `/data/lab-nextcloud/caddy_config`
 
 Consider using Portainer's backup features or setting up automated volume backups.
 
