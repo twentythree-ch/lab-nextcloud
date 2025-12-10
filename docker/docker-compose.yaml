@@ -50,7 +50,7 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /data/lab-nextcloud/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
       - nextcloud_data:/var/www/html:ro

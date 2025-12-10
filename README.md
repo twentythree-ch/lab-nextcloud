@@ -26,6 +26,12 @@ This repository contains a Docker Compose stack for running Nextcloud with a Clo
    mkdir -p /data/lab-nextcloud/{db,nextcloud,caddy_data,caddy_config}
    chmod -R 755 /data/lab-nextcloud
    ```
+6. Copy the `Caddyfile` to your host:
+   ```bash
+   # Download or copy the Caddyfile from your repo to:
+   /data/lab-nextcloud/Caddyfile
+   chmod 644 /data/lab-nextcloud/Caddyfile
+   ```
 
 ## Setup Instructions
 
@@ -108,10 +114,20 @@ After initial setup, you may want to configure:
 ```
 your-repo/
 ├── docker-compose.yml    # Main Docker Compose configuration
-├── Caddyfile            # Caddy reverse proxy configuration
+├── Caddyfile            # Caddy reverse proxy configuration (copy to /data/lab-nextcloud/)
 ├── .env.template        # Template for environment variables
 ├── .gitignore           # Git ignore file (include .env)
 └── README.md            # This file
+```
+
+**Host system:**
+```
+/data/lab-nextcloud/
+├── Caddyfile            # Copy from repo
+├── db/                  # PostgreSQL data
+├── nextcloud/           # Nextcloud files
+├── caddy_data/          # Caddy certificates
+└── caddy_config/        # Caddy configuration cache
 ```
 
 ## Updating the Stack
