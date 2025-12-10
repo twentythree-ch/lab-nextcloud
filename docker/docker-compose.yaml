@@ -36,9 +36,11 @@ services:
       - REDIS_HOST=redis
       - REDIS_HOST_PASSWORD=${REDIS_PASSWORD}
       - NEXTCLOUD_TRUSTED_DOMAINS=${NEXTCLOUD_DOMAIN}
-      - TRUSTED_PROXIES=caddy
+      - TRUSTED_PROXIES=caddy 172.25.0.0/24
       - OVERWRITEPROTOCOL=https
       - OVERWRITEHOST=${NEXTCLOUD_DOMAIN}
+      - OVERWRITEWEBROOT=/
+      - OVERWRITECONDADDR=^172\.25\..*$
     depends_on:
       - db
       - redis
