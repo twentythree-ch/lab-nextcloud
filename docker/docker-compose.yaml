@@ -28,6 +28,7 @@ services:
     restart: unless-stopped
     volumes:
       - nextcloud_data:/var/www/html
+      - /data/lab-nextcloud/nextcloud-config.php:/var/www/html/config/custom.config.php:ro
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_DB=nextcloud
