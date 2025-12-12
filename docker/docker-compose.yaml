@@ -46,6 +46,7 @@ services:
       - redis
     networks:
       - internal
+      - external-services
 
   # Caddy reverse proxy
   caddy:
