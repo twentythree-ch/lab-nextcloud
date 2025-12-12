@@ -69,10 +69,12 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN} --protocol http2
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     networks:
       - internal
       - external-services
+    environment:
+      - TUNNEL_TRANSPORT_PROTOCOL=http2
     depends_on:
       - caddy
 
