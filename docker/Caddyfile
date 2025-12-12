@@ -5,6 +5,8 @@
     # PHP-FPM configuration for Nextcloud
     php_fastcgi nextcloud:9000 {
         env front_controller_active true
+        env modHeadersAvailable true
+        trusted_proxies private_ranges
     }
 
     # File server for static files

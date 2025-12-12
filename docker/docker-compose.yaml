@@ -28,7 +28,6 @@ services:
     restart: unless-stopped
     volumes:
       - nextcloud_data:/var/www/html
-      - /data/lab-nextcloud/nextcloud-config.php:/var/www/html/config/custom.config.php:ro
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_DB=nextcloud
@@ -37,11 +36,11 @@ services:
       - REDIS_HOST=redis
       - REDIS_HOST_PASSWORD=${REDIS_PASSWORD}
       - NEXTCLOUD_TRUSTED_DOMAINS=${NEXTCLOUD_DOMAIN}
-      - TRUSTED_PROXIES=caddy 172.25.0.0/24
+      - TRUSTED_PROXIES=caddy
       - OVERWRITEPROTOCOL=https
       - OVERWRITEHOST=${NEXTCLOUD_DOMAIN}
       - OVERWRITEWEBROOT=/
-      - OVERWRITECONDADDR=^172\.25\..*$
+      - OVERWRITECLIURL=https://${NEXTCLOUD_DOMAIN}
     depends_on:
       - db
       - redis
