@@ -221,6 +221,40 @@ Consider using Portainer's backup features or setting up automated volume backup
 
 ## Additional Features
 
+### Geographic Access Restrictions with Cloudflare WAF
+
+You can restrict access to your Nextcloud (and other services) to specific countries using Cloudflare's Web Application Firewall:
+
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Select your domain
+3. Navigate to **Security** → **WAF** → **Custom rules**
+4. Click **Create rule**
+
+5. **Configure the rule**:
+   - **Rule name**: "Block non-allowed countries"
+   - **Field**: Country
+   - **Operator**: is not in
+   - **Value**: Select your allowed countries (e.g., CH, DE, AT, IT, FR, BE, LU, LI, ES, NL)
+   - Click **And**
+   - **Field**: Hostname
+   - **Operator**: is in
+   - **Value**: Enter your hostnames (one per line):
+     ```
+     cloud.vansummeren.ch
+     homeassistant.vansummeren.ch
+     ```
+   - **Then**: Block (or Challenge for CAPTCHA instead)
+
+6. Click **Deploy**
+
+**Benefits:**
+- ✅ One rule covers multiple services/tunnels
+- ✅ Easy to add/remove countries or hostnames
+- ✅ Blocks malicious traffic before it reaches your server
+- ✅ Reduces attack surface significantly
+
+**Important**: Test the rule from an allowed country first to avoid locking yourself out!
+
 ### SAML Authentication with Microsoft Entra ID
 
 The stack supports SAML SSO with Microsoft Entra ID (Azure AD). To configure:
