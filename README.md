@@ -42,16 +42,20 @@ This repository contains a Docker Compose stack for running Nextcloud with a Clo
 
 ## Setup Instructions
 
-### 1. Create Cloudflare Tunnel
+### 5. Configure Cloudflare Tunnel
+
+**IMPORTANT**: Use the IP address of the Caddy container, NOT the hostname, to avoid port resolution issues.
 
 1. Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
 2. Navigate to **Networks** > **Tunnels**
 3. Create a new tunnel (give it a name like "nextcloud")
 4. Copy the tunnel token (you'll need this for the `.env` file)
 5. Configure the tunnel:
-   - **Public Hostname**: your-domain.com (or subdomain)
-   - **Service**: HTTP, 172.25.0.4:80 (use the Caddy container's IP, not hostname)
-   - **Note**: Using the container hostname `caddy:80` may cause port resolution issues. Use the IP address from the external-services network instead.
+   - **Public Hostname**: cloud.yourdomain.com
+   - **Service Type**: HTTP
+   - **Service URL**: `172.25.0.4:80` (use the Caddy container's IP from external-services network, NOT `caddy:80`)
+   
+   **Why use IP instead of hostname?** Using `caddy:80` can cause Cloudflare Tunnel to incorrectly resolve ports, leading to redirect issues. Using the IP address directly avoids this problem.
 
 ### 2. Prepare Your Repository
 
@@ -61,6 +65,7 @@ This repository contains a Docker Compose stack for running Nextcloud with a Clo
    - `Caddyfile`
    - `.env.template`
    - `README.md`
+   - `.gitignore`
 3. **Important**: Create a `.env` file locally (DO NOT commit this to Git!)
 
 ### 3. Configure Environment Variables
@@ -159,15 +164,32 @@ In Portainer, go to your stack and click on individual containers to view logs.
 
 1. **Cannot access Nextcloud**: 
    - Check Cloudflare Tunnel status in the cloudflared logs
-   - Verify tunnel configuration points to `http://caddy:80`
+   - Verify tunnel configuration points to `http://172.25.0.4:80` (use IP, not hostname)
+   - Check that the tunnel is active in Cloudflare dashboard
 
-2. **Database connection errors**:
+2. **Redirects to wrong port (e.g., port 84)**:
+   - This happens when using hostname `caddy:80` in Cloudflare Tunnel
+   - Solution: Use IP address `172.25.0.4:80` instead
+   - Verify in Cloudflare Tunnel settings
+
+3. **Database connection errors**:
    - Ensure `DB_PASSWORD` matches in both Nextcloud and PostgreSQL
    - Check if PostgreSQL container is running
 
-3. **Redis connection issues**:
+4. **Redis connection issues**:
    - Verify `REDIS_PASSWORD` is set correctly
    - Check Redis container logs
+
+5. **Cannot upload files / folders missing**:
+   - Check for broken apps: `docker exec -u www-data <container> php occ app:list`
+   - Disable problematic apps: `docker exec -u www-data <container> php occ app:disable <appname>`
+   - Common culprits: `organization_folders` (conflicts with `groupfolders`)
+   - Check permissions: `docker exec <container> ls -la /var/www/html/data`
+
+6. **Slow app downloads / cannot install apps**:
+   - Nextcloud container needs internet access
+   - Ensure it's connected to `external-services` network in docker-compose.yml
+   - This is already configured in the provided compose file
 
 ### Resetting the Stack
 
@@ -197,6 +219,33 @@ Important directories to backup on your host system:
 
 Consider using Portainer's backup features or setting up automated volume backups.
 
-## License
+## Additional Features
 
-This configuration is provided as-is for personal use.
+### SAML Authentication with Microsoft Entra ID
+
+The stack supports SAML SSO with Microsoft Entra ID (Azure AD). To configure:
+
+1. **Install SAML app in Nextcloud**:
+   - Log in as admin → Apps → Search for "SSO & SAML authentication"
+   - Download and enable
+
+2. **Configure in Azure/Entra ID**:
+   - Create Enterprise Application (Non-gallery)
+   - Set up SAML with:
+     - Entity ID: `https://your-domain.com/apps/user_saml/saml/metadata`
+     - Reply URL: `https://your-domain.com/apps/user_saml/saml/acs`
+     - Sign-on URL: `https://your-domain.com`
+
+3. **Configure in Nextcloud**:
+   - Settings → SSO & SAML authentication
+   - Add identity provider with Azure metadata
+   - Map attributes (email, displayname, uid)
+
+### Group Folders
+
+The `groupfolders` app is compatible and can be enabled for shared folder management:
+```bash
+docker exec -u www-data <nextcloud-container> php occ app:enable groupfolders
+```
+
+**Note**: Avoid installing `organization_folders` as it conflicts with `groupfolders`.
