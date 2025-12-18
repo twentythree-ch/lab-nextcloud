@@ -1,0 +1,27 @@
+version: 2
+updates:
+  # Monitor Docker images in docker-compose.yaml
+  - package-ecosystem: "docker-compose"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "docker"
+      include: "scope"
+    # Group updates by type
+    groups:
+      nextcloud-app:
+        patterns:
+          - "nextcloud*"
+      infrastructure:
+        patterns:
+          - "postgres*"
+          - "redis*"
+          - "caddy*"
+          - "cloudflare/*"
