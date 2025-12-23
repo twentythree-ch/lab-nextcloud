@@ -1,0 +1,12 @@
+name: Deploy
+
+on:
+  push:
+    branches: [develop, main]
+
+jobs:
+  deploy:
+    uses: vansummeren-ch/github-workflows/.github/workflows/deploy-to-portainer.yml@main
+    with:
+      stack_name: ${{ github.event.repository.name }}  # Uses repo name as stack name
+    secrets: inherit  # Automatically inherits all organization secrets
