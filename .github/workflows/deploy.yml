@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    uses: twentythree-ch/github-workflows/.github/workflows/deploy-to-portainer.yml@main
+    uses: twentythree-ch/github-workflows/.github/workflows/deploy-to-portainer.yml@HEAD
     with:
       stack_name: ${{ github.event.repository.name }}  # Uses repo name as stack name
     secrets: inherit  # Automatically inherits all organization secrets
