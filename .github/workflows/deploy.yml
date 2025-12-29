@@ -9,6 +9,7 @@ jobs:
   prepare_variables_dev:
     name: Prepare deployment variables for development environment
     runs-on: ubuntu-latest
+    environment: "development"
     outputs:
       stack_name: ${{ steps.set-vars.outputs.stack_name }}
       portainer_env_vars: ${{ steps.set-vars.outputs.portainer_env_vars }}
@@ -42,6 +43,7 @@ jobs:
   prepare_variables_prod:
     name: Prepare deployment variables for development environment
     runs-on: ubuntu-latest
+    environment: "production"
     outputs:
       stack_name: ${{ steps.set-vars.outputs.stack_name }}
       portainer_env_vars: ${{ steps.set-vars.outputs.portainer_env_vars }}
