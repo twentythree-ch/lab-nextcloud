@@ -5,11 +5,16 @@ on:
     branches: [develop, main]
 
 jobs:
+
   deploy:
     uses: twentythree-ch/github-workflows/.github/workflows/deploy-to-portainer.yml@main
     with:
       stack_name: ${{ github.event.repository.name }}  # Uses repo name as stack name
+      portainer_url: "https://portainer-dev.twentythree.ch"
+      portainer_endpoint_id: "2"
+      gh_username: "vansummeren"
+      run_network_test: true
     secrets:
-      portainer_url: ${{ secrets.PORTAINER_URL }}
       portainer_token: ${{ secrets.PORTAINER_TOKEN }}
-      portainer_endpoint_id: ${{ secrets.PORTAINER_ENDPOINT_ID }}
+      netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
+      gh_token: ${{ secrets.GH_PAT }}
