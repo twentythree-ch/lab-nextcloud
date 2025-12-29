@@ -18,7 +18,7 @@ jobs:
         id: set-vars
         run: |
           echo "stack_name=${GITHUB_REPOSITORY##*/}" >> $GITHUB_OUTPUT
-          echo "portainer_env_vars={'DB_PASSWORD': '${{secrets.DB_PASSWORD}}', 'REDIS_PASSWORD': '${{secrets.REDIS_PASSWORD}}', 'NEXTCLOUD_DOMAIN': '${{vars.NEXTCLOUD_DOMAIN}}', 'CLOUDFLARE_TUNNEL_TOKEN': '${{secrets.CLOUDFLARE_TUNNEL_TOKEN}}'}" >> $GITHUB_OUTPUT
+          echo "portainer_env_vars=[{ \"name\": \"DB_PASSWORD\", \"value\": \"${{secrets.DB_PASSWORD}}\"}, { \"name\": \"REDIS_PASSWORD\", \"value\": \"${{secrets.REDIS_PASSWORD}}\" }, { \"name\": \"NEXTCLOUD_DOMAIN\", \"value\": \"${{vars.NEXTCLOUD_DOMAIN}}\" }, { \"name\": \"CLOUDFLARE_TUNNEL_TOKEN\", \"value\": \"${{secrets.CLOUDFLARE_TUNNEL_TOKEN}}\" } ]" >> $GITHUB_OUTPUT
     if: github.ref == 'refs/heads/develop'
 
   deploy_development:
@@ -52,7 +52,7 @@ jobs:
         id: set-vars
         run: |
           echo "stack_name=${GITHUB_REPOSITORY##*/}" >> $GITHUB_OUTPUT
-          echo "portainer_env_vars={'DB_PASSWORD': '${{secrets.DB_PASSWORD}}', 'REDIS_PASSWORD': '${{secrets.REDIS_PASSWORD}}', 'NEXTCLOUD_DOMAIN': '${{vars.NEXTCLOUD_DOMAIN}}', 'CLOUDFLARE_TUNNEL_TOKEN': '${{secrets.CLOUDFLARE_TUNNEL_TOKEN}}'}" >> $GITHUB_OUTPUT
+          echo "portainer_env_vars=[{ \"name\": \"DB_PASSWORD\", \"value\": \"${{secrets.DB_PASSWORD}}\"}, { \"name\": \"REDIS_PASSWORD\", \"value\": \"${{secrets.REDIS_PASSWORD}}\" }, { \"name\": \"NEXTCLOUD_DOMAIN\", \"value\": \"${{vars.NEXTCLOUD_DOMAIN}}\" }, { \"name\": \"CLOUDFLARE_TUNNEL_TOKEN\", \"value\": \"${{secrets.CLOUDFLARE_TUNNEL_TOKEN}}\" } ]" >> $GITHUB_OUTPUT
     if: github.ref == 'refs/heads/main'
 
   deploy_production:
