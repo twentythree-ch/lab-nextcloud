@@ -5,7 +5,7 @@ Summary
 - Primary deploy target: Portainer (Git-backed stacks or Web editor).
 
 What to know before editing
-- The canonical compose file is `docker/docker-compose.yaml` and expects host paths under `/data/lab-nextcloud`.
+- The canonical compose file is `docker/docker-compose.yml` and expects host paths under `/data/lab-nextcloud`.
 - Environment is driven by `.env` (copy from `.env.template`). Never commit `.env`.
 - Caddy configuration lives in `docker/Caddyfile`. Nextcloud pre-configuration is in `docker/nextcloud-config.php`.
 
@@ -23,7 +23,7 @@ Architecture & important patterns
 Key operational details agents must respect
 - Cloudflare Tunnel must be configured to target the Caddy container IP (example in README: `172.25.0.4:80`). Using `caddy:80` causes port/redirect issues. If you change networks or compose ordering, update the README and any automation that computes the IP.
 - Volumes are bind-mounted to `/data/lab-nextcloud/*`. Any automation that migrates or backs up data should use these host paths.
-- Nextcloud runtime config uses environment variables in the compose file (e.g., `NEXTCLOUD_DOMAIN`, `DB_PASSWORD`, `REDIS_PASSWORD`). Always reference `docker/docker-compose.yaml` when adding/removing envs.
+- Nextcloud runtime config uses environment variables in the compose file (e.g., `NEXTCLOUD_DOMAIN`, `DB_PASSWORD`, `REDIS_PASSWORD`). Always reference `docker/docker-compose.yml` when adding/removing envs.
 - `trusted_proxies` is set to `caddy` in `docker/nextcloud-config.php` and via env in the compose. If renaming the proxy, update both places.
 
 Developer workflows & useful commands
@@ -35,9 +35,9 @@ Developer workflows & useful commands
 - Local/Portainer deploy: Use Portainer Stacks (Git or Web editor) as documented in README.md.
 - Quick local bring-up (for debugging only):
   - Create host directories shown in README and set proper permissions.
-  - `docker compose -f docker/docker-compose.yaml up -d`
-  - View logs: `docker compose -f docker/docker-compose.yaml logs -f caddy nextcloud db redis cloudflared`
-- Reset stack (destructive): `docker compose -f docker/docker-compose.yaml down -v` (back up `/data/lab-nextcloud` first).
+  - `docker compose -f docker/docker-compose.yml up -d`
+  - View logs: `docker compose -f docker/docker-compose.yml logs -f caddy nextcloud db redis cloudflared`
+- Reset stack (destructive): `docker compose -f docker/docker-compose.yml down -v` (back up `/data/lab-nextcloud` first).
 
 Patterns and conventions to follow
 - Config-as-data: prefer editing `.env.template` and host-mounted files (`docker/Caddyfile`, `docker/nextcloud-config.php`) rather than in-image changes.
@@ -45,7 +45,7 @@ Patterns and conventions to follow
 - Networking: services talk over `internal`; internet access comes via `external-services`. Code that needs external network access should be attached to `external-services` (e.g., `nextcloud`, `caddy`, `cloudflared`).
 
 Files to reference when changing behavior
-- Compose and services: `docker/docker-compose.yaml`
+- Compose and services: `docker/docker-compose.yml`
 - Reverse proxy: `docker/Caddyfile`
 - Nextcloud config example: `docker/nextcloud-config.php`
 - High level instructions and Cloudflare notes: `README.md`
@@ -56,7 +56,7 @@ Examples (copy commands)
   mkdir -p /data/lab-nextcloud/{db,nextcloud,caddy_data,caddy_config}
   chmod -R 755 /data/lab-nextcloud
 - Run locally for debug:
-  docker compose -f docker/docker-compose.yaml up -d
+  docker compose -f docker/docker-compose.yml up -d
 
 If something's unclear
 - Ask for the intended deployment target (Portainer vs. plain Docker) and whether the `external-services` network exists on the host; these two determine the correct Cloudflared/Caddy setup.
