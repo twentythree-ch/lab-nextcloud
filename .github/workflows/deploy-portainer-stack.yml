@@ -78,9 +78,30 @@ jobs:
           echo "Installing NetBird..."
           curl -fsSL https://pkgs.netbird.io/install.sh | sh
           
+          echo "Starting NetBird service..."
+          sudo netbird service start || true
+          
+          echo "Waiting for daemon socket to be ready..."
+          for i in {1..30}; do
+            if [ -S "/var/run/netbird/sock" ]; then
+              echo "NetBird daemon is ready"
+              break
+            fi
+            echo "Waiting for daemon... ($i/30)"
+            sleep 1
+          done
+          
+          if [ ! -S "/var/run/netbird/sock" ]; then
+            echo "ERROR: NetBird daemon socket not available after 30 seconds"
+            echo "Attempting to restart service..."
+            sudo netbird service stop || true
+            sudo netbird service start
+            sleep 5
+          fi
+          
           echo "Connecting to NetBird network..."
           PEER_NAME="gh-${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ inputs.environment }}-${{ github.run_id }}"
-          sudo netbird up --setup-key "${{ secrets.netbird_setup_key }}" --hostname "$PEER_NAME" --daemon-addr "unix:///var/run/netbird/sock"
+          sudo netbird up --setup-key "${{ secrets.netbird_setup_key }}" --hostname "$PEER_NAME"
           
           echo "Waiting for NetBird connection..."
           sleep 5
