@@ -1,0 +1,215 @@
+name: Deploy Stack to Portainer (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Deployment environment (development/production)'
+        required: true
+        type: string
+      stack_name:
+        description: 'Name of the Portainer stack'
+        required: true
+        type: string
+      portainer_url:
+        description: 'Portainer URL (via NetBird)'
+        required: true
+        type: string
+      portainer_endpoint_id:
+        description: 'Portainer endpoint ID'
+        required: true
+        type: string
+      docker_host_ip:
+        description: 'Docker host IP for SCP (NetBird internal)'
+        required: true
+        type: string
+      ssh_user:
+        description: 'SSH user on Docker host'
+        required: false
+        type: string
+        default: 'deploy'
+      git_branch:
+        description: 'Git branch to deploy from'
+        required: false
+        type: string
+        default: 'main'
+      compose_file_path:
+        description: 'Path to docker-compose.yml in repo'
+        required: false
+        type: string
+        default: 'docker/docker-compose.yml'
+    secrets:
+      netbird_setup_key:
+        description: 'NetBird setup key for tunnel'
+        required: true
+      portainer_token:
+        description: 'Portainer API token'
+        required: true
+      gh_pat:
+        description: 'GitHub PAT for Portainer Git authentication'
+        required: true
+      ssh_private_key:
+        description: 'SSH private key for SCP to Docker host'
+        required: true
+      cloudflare_tunnel_token:
+        description: 'Cloudflare Tunnel token'
+        required: true
+      db_password:
+        description: 'PostgreSQL password'
+        required: true
+      redis_password:
+        description: 'Redis password'
+        required: true
+      nextcloud_domain:
+        description: 'Nextcloud domain'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup NetBird tunnel
+        run: |
+          echo "Installing NetBird..."
+          curl -fsSL https://pkgs.netbird.io/install.sh | sh
+          
+          echo "Connecting to NetBird network..."
+          PEER_NAME="gh-${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ inputs.environment }}-${{ github.run_id }}"
+          sudo netbird up --setup-key "${{ secrets.netbird_setup_key }}" --hostname "$PEER_NAME" --daemon-addr "unix:///var/run/netbird/sock"
+          
+          echo "Waiting for NetBird connection..."
+          sleep 5
+          
+          echo "NetBird status:"
+          sudo netbird status
+          
+          echo "Testing connectivity to Portainer..."
+          curl -f -s -o /dev/null -w "%{http_code}" "${{ inputs.portainer_url }}/api/status" || echo "Portainer not yet reachable, continuing..."
+      
+      - name: Setup SSH key for Docker host
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ssh_private_key }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ inputs.docker_host_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+      
+      - name: Prepare host directories on Docker host
+        run: |
+          echo "Creating data directories on Docker host..."
+          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "mkdir -p /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config} && chmod -R 755 /data/${{ inputs.stack_name }}"
+      
+      - name: Copy configuration files to Docker host
+        run: |
+          echo "Copying Caddyfile..."
+          scp docker/Caddyfile ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/Caddyfile
+          
+          echo "Copying nextcloud-config.php..."
+          # Update domain in config before copying
+          sed "s|cloud.vansummeren.ch|${{ secrets.nextcloud_domain }}|g" docker/nextcloud-config.php > /tmp/nextcloud-config.php
+          scp /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/nextcloud-config.php
+          
+          echo "Setting permissions..."
+          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "chmod 644 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php}"
+      
+      - name: Check if stack exists
+        id: check_stack
+        run: |
+          STACK_EXISTS=$(curl -s -H "X-API-Key: ${{ secrets.portainer_token }}" \
+            "${{ inputs.portainer_url }}/api/stacks" | \
+            jq -r --arg name "${{ inputs.stack_name }}" '.[] | select(.Name == $name) | .Id' || echo "")
+          
+          if [ -n "$STACK_EXISTS" ]; then
+            echo "stack_id=$STACK_EXISTS" >> $GITHUB_OUTPUT
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Stack exists with ID: $STACK_EXISTS"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Stack does not exist, will create new"
+          fi
+      
+      - name: Update existing stack
+        if: steps.check_stack.outputs.exists == 'true'
+        run: |
+          echo "Updating existing stack ID: ${{ steps.check_stack.outputs.stack_id }}"
+          
+          # Trigger Git pull and redeploy
+          curl -X PUT \
+            -H "X-API-Key: ${{ secrets.portainer_token }}" \
+            -H "Content-Type: application/json" \
+            "${{ inputs.portainer_url }}/api/stacks/${{ steps.check_stack.outputs.stack_id }}/git/redeploy?endpointId=${{ inputs.portainer_endpoint_id }}" \
+            -d '{
+              "RepositoryReferenceName": "${{ inputs.git_branch }}",
+              "RepositoryAuthentication": true,
+              "RepositoryUsername": "vansummeren",
+              "RepositoryPassword": "${{ secrets.gh_pat }}",
+              "Env": [
+                {"name": "CLOUDFLARE_TUNNEL_TOKEN", "value": "${{ secrets.cloudflare_tunnel_token }}"},
+                {"name": "DB_PASSWORD", "value": "${{ secrets.db_password }}"},
+                {"name": "REDIS_PASSWORD", "value": "${{ secrets.redis_password }}"},
+                {"name": "NEXTCLOUD_DOMAIN", "value": "${{ secrets.nextcloud_domain }}"}
+              ],
+              "Prune": false,
+              "PullImage": true
+            }' || echo "Update failed, will try to recreate"
+      
+      - name: Create new stack
+        if: steps.check_stack.outputs.exists == 'false'
+        run: |
+          echo "Creating new stack: ${{ inputs.stack_name }}"
+          
+          # Prepare compose file path - update volume paths for environment
+          TEMP_COMPOSE=$(mktemp)
+          sed "s|/data/lab-nextcloud|/data/${{ inputs.stack_name }}|g" ${{ inputs.compose_file_path }} > "$TEMP_COMPOSE"
+          
+          # Create stack from Git repository
+          curl -X POST \
+            -H "X-API-Key: ${{ secrets.portainer_token }}" \
+            -H "Content-Type: application/json" \
+            "${{ inputs.portainer_url }}/api/stacks?type=2&method=repository&endpointId=${{ inputs.portainer_endpoint_id }}" \
+            -d '{
+              "Name": "${{ inputs.stack_name }}",
+              "RepositoryURL": "https://github.com/${{ github.repository }}",
+              "RepositoryReferenceName": "refs/heads/${{ inputs.git_branch }}",
+              "ComposeFile": "${{ inputs.compose_file_path }}",
+              "RepositoryAuthentication": true,
+              "RepositoryUsername": "vansummeren",
+              "RepositoryPassword": "${{ secrets.gh_pat }}",
+              "Env": [
+                {"name": "CLOUDFLARE_TUNNEL_TOKEN", "value": "${{ secrets.cloudflare_tunnel_token }}"},
+                {"name": "DB_PASSWORD", "value": "${{ secrets.db_password }}"},
+                {"name": "REDIS_PASSWORD", "value": "${{ secrets.redis_password }}"},
+                {"name": "NEXTCLOUD_DOMAIN", "value": "${{ secrets.nextcloud_domain }}"}
+              ]
+            }'
+      
+      - name: Wait for stack deployment
+        run: |
+          echo "Waiting for stack to be ready..."
+          sleep 10
+          
+          # Get stack status
+          STACK_ID="${{ steps.check_stack.outputs.stack_id }}"
+          if [ -z "$STACK_ID" ]; then
+            STACK_ID=$(curl -s -H "X-API-Key: ${{ secrets.portainer_token }}" \
+              "${{ inputs.portainer_url }}/api/stacks" | \
+              jq -r --arg name "${{ inputs.stack_name }}" '.[] | select(.Name == $name) | .Id')
+          fi
+          
+          if [ -n "$STACK_ID" ]; then
+            curl -s -H "X-API-Key: ${{ secrets.portainer_token }}" \
+              "${{ inputs.portainer_url }}/api/stacks/$STACK_ID" | jq '.'
+          fi
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Disconnecting NetBird..."
+          sudo netbird down || true
+          
+          echo "Cleaning up SSH key..."
+          rm -f ~/.ssh/id_rsa

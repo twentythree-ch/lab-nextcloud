@@ -1,120 +1,105 @@
-name: Deploy
+name: Deploy to Portainer
 
 on:
   push:
-    branches: [develop, main]
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - development
+          - production
+          - both
+      git_branch:
+        description: 'Git branch to deploy from (leave empty to use default)'
+        required: false
+        type: string
 
 jobs:
-  deploy_dev:
-    name: Deploy to development
+  determine-environment:
     runs-on: ubuntu-latest
-    environment: development
-    if: github.ref == 'refs/heads/develop'
+    outputs:
+      deploy_dev: ${{ steps.set-env.outputs.deploy_dev }}
+      deploy_prod: ${{ steps.set-env.outputs.deploy_prod }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set deployment variables
-        id: set-vars
-        env:
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-          CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
-          NEXTCLOUD_DOMAIN: ${{ vars.NEXTCLOUD_DOMAIN }}
+      - name: Determine deployment environment(s)
+        id: set-env
         run: |
-          echo "stack_name=${GITHUB_REPOSITORY##*/}" >> $GITHUB_OUTPUT
-          portainer_env_vars='[
-            { \"name\": \"DB_PASSWORD\", \"value\": \"$DB_PASSWORD\"},
-            { \"name\": \"REDIS_PASSWORD\", \"value\": \"$REDIS_PASSWORD\" },
-            { \"name\": \"NEXTCLOUD_DOMAIN\", \"value\": \"$NEXTCLOUD_DOMAIN\" },
-            { \"name\": \"CLOUDFLARE_TUNNEL_TOKEN\", \"value\": \"$CLOUDFLARE_TUNNEL_TOKEN\" }
-          ]'
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+              echo 'deploy_dev=false' >> $GITHUB_OUTPUT
+              echo 'deploy_prod=true' >> $GITHUB_OUTPUT
+            elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+              echo 'deploy_dev=true' >> $GITHUB_OUTPUT
+              echo 'deploy_prod=false' >> $GITHUB_OUTPUT
+            fi
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            case "${{ github.event.inputs.environment }}" in
+              "development")
+                echo 'deploy_dev=true' >> $GITHUB_OUTPUT
+                echo 'deploy_prod=false' >> $GITHUB_OUTPUT
+                ;;
+              "production")
+                echo 'deploy_dev=false' >> $GITHUB_OUTPUT
+                echo 'deploy_prod=true' >> $GITHUB_OUTPUT
+                ;;
+              "both")
+                echo 'deploy_dev=true' >> $GITHUB_OUTPUT
+                echo 'deploy_prod=true' >> $GITHUB_OUTPUT
+                ;;
+            esac
+          fi
 
-      - name: Deploy stack
-        uses: twentythree-ch/github-workflows/.github/actions/deploy-stack@main
-        with:
-          environment: development
-          netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
-          run_network_test: true
-          portainer_url: ${{ vars.PORTAINER_URL }}
-          portainer_token: ${{ secrets.PORTAINER_TOKEN }}
-          portainer_endpoint_id: ${{ vars.PORTAINER_ENDPOINT_ID }}
-          stack_name: ${{ github.event.repository.name }}   
-          env_vars: "$portainer_env_vars"
-          compose_file: docker/docker-compose.yml
-          gh_username: "vansummeren"
-          gh_token: ${{ secrets.GH_PAT }}
+  deploy-development:
+    needs: determine-environment
+    if: needs.determine-environment.outputs.deploy_dev == 'true'
+    uses: ./.github/workflows/deploy-portainer-stack.yml
+    with:
+      environment: development
+      stack_name: lab-nextcloud-development
+      portainer_url: ${{ vars.PORTAINER_URL }}
+      portainer_endpoint_id: ${{ vars.PORTAINER_ENDPOINT_ID }}
+      docker_host_ip: '192.168.11.2'
+      ssh_user: 'deploy'
+      git_branch: ${{ github.event.inputs.git_branch || 'develop' }}
+      compose_file_path: 'docker/docker-compose.yaml'
+    secrets:
+      netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
+      portainer_token: ${{ secrets.PORTAINER_TOKEN }}
+      gh_pat: ${{ secrets.GH_PAT }}
+      ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+      cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+      db_password: ${{ secrets.DB_PASSWORD }}
+      redis_password: ${{ secrets.REDIS_PASSWORD }}
+      nextcloud_domain: ${{ secrets.NEXTCLOUD_DOMAIN }}
 
-          
-          
-          
-  # prepare_variables_dev:
-  #   name: Prepare deployment variables for development environment
-  #   runs-on: ubuntu-latest
-  #   environment: "development"
-  #   outputs:
-  #     stack_name: ${{ steps.set-vars.outputs.stack_name }}
-  #     portainer_env_vars: ${{ steps.set-vars.outputs.portainer_env_vars }}
-  #   steps:
-  #     - name: Set deployment variables
-  #       id: set-vars
-  #       env:
-  #         DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-  #         REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-  #         CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
-  #         NEXTCLOUD_DOMAIN: ${{ vars.NEXTCLOUD_DOMAIN }}
-  #       run: |
-  #         echo "stack_name=${GITHUB_REPOSITORY##*/}" >> $GITHUB_OUTPUT
-  #         echo "portainer_env_vars=[{ \"name\": \"DB_PASSWORD\", \"value\": \"$DB_PASSWORD\"}, { \"name\": \"REDIS_PASSWORD\", \"value\": \"$REDIS_PASSWORD\" }, { \"name\": \"NEXTCLOUD_DOMAIN\", \"value\": \"$NEXTCLOUD_DOMAIN\" }, { \"name\": \"CLOUDFLARE_TUNNEL_TOKEN\", \"value\": \"$CLOUDFLARE_TUNNEL_TOKEN\" } ]" >> $GITHUB_OUTPUT
-  #   if: github.ref == 'refs/heads/develop'
-
-  # deploy_development:
-  #   name: Deploy to development Portainer
-  #   uses: twentythree-ch/github-workflows/.github/workflows/deploy-to-portainer.yml@main
-  #   with:
-  #     stack_name: ${{ github.event.repository.name }}  # Uses repo name as stack name
-  #     portainer_url: "https://portainer-dev.twentythree.ch"
-  #     portainer_endpoint_id: "2"
-  #     gh_username: "vansummeren"
-  #     run_network_test: true
-  #     environment: "development"
-  #   secrets:
-  #     portainer_token: ${{ secrets.PORTAINER_TOKEN }}
-  #     netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
-  #     gh_token: ${{ secrets.GH_PAT }}
-  #     env_vars: ${{ needs.prepare_variables_dev.outputs.portainer_env_vars }}
-  #   if: github.ref == 'refs/heads/develop'
-  #   needs: prepare_variables_dev
-
-  
-  # prepare_variables_prod:
-  #   name: Prepare deployment variables for development environment
-  #   runs-on: ubuntu-latest
-  #   environment: "production"
-  #   outputs:
-  #     stack_name: ${{ steps.set-vars.outputs.stack_name }}
-  #     portainer_env_vars: ${{ steps.set-vars.outputs.portainer_env_vars }}
-  #   steps:
-  #     - name: Set deployment variables
-  #       id: set-vars
-  #       run: |
-  #         echo "stack_name=${GITHUB_REPOSITORY##*/}" >> $GITHUB_OUTPUT
-  #         echo "portainer_env_vars=[{ \"name\": \"DB_PASSWORD\", \"value\": \"${{secrets.DB_PASSWORD}}\"}, { \"name\": \"REDIS_PASSWORD\", \"value\": \"${{secrets.REDIS_PASSWORD}}\" }, { \"name\": \"NEXTCLOUD_DOMAIN\", \"value\": \"${{vars.NEXTCLOUD_DOMAIN}}\" }, { \"name\": \"CLOUDFLARE_TUNNEL_TOKEN\", \"value\": \"${{secrets.CLOUDFLARE_TUNNEL_TOKEN}}\" } ]" >> $GITHUB_OUTPUT
-  #   if: github.ref == 'refs/heads/main'
-
-  # deploy_production:
-  #   name: Deploy to production Portainer
-  #   uses: twentythree-ch/github-workflows/.github/workflows/deploy-to-portainer.yml@main
-  #   with:
-  #     stack_name: ${{ github.event.repository.name }}  # Uses repo name as stack name
-  #     portainer_url: "https://portainer-dev.twentythree.ch"
-  #     portainer_endpoint_id: "2"
-  #     gh_username: "vansummeren"
-  #     run_network_test: true
-  #     environment: "production"
-  #   secrets:
-  #     portainer_token: ${{ secrets.PORTAINER_TOKEN }}
-  #     netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
-  #     gh_token: ${{ secrets.GH_PAT }}
-  #     env_vars: ${{ needs.prepare_variables_prod.outputs.portainer_env_vars }}
-  #   if: github.ref == 'refs/heads/main'
-  #   needs: prepare_variables_prod
+  deploy-production:
+    needs: [determine-environment, deploy-development]
+    if: |
+      always() &&
+      needs.determine-environment.outputs.deploy_prod == 'true' &&
+      (needs.deploy-development.result == 'success' || needs.deploy-development.result == 'skipped')
+    uses: ./.github/workflows/deploy-portainer-stack.yml
+    with:
+      environment: production
+      stack_name: lab-nextcloud-production
+      portainer_url: ${{ vars.PORTAINER_URL }}
+      portainer_endpoint_id: ${{ vars.PORTAINER_ENDPOINT_ID }}
+      docker_host_ip: '192.168.11.2'
+      ssh_user: 'deploy'
+      git_branch: ${{ github.event.inputs.git_branch || 'main' }}
+      compose_file_path: 'docker/docker-compose.yaml'
+    secrets:
+      netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
+      portainer_token: ${{ secrets.PORTAINER_TOKEN }}
+      gh_pat: ${{ secrets.GH_PAT }}
+      ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+      cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+      db_password: ${{ secrets.DB_PASSWORD }}
+      redis_password: ${{ secrets.REDIS_PASSWORD }}
+      nextcloud_domain: ${{ secrets.NEXTCLOUD_DOMAIN }}
