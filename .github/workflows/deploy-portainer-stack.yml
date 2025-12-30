@@ -27,7 +27,7 @@ on:
         description: 'SSH user on Docker host'
         required: false
         type: string
-        default: 'root'
+        default: 'deploy'
       git_branch:
         description: 'Git branch to deploy from'
         required: false

@@ -61,7 +61,7 @@ jobs:
       portainer_url: ${{ vars.PORTAINER_URL }}
       portainer_endpoint_id: ${{ vars.PORTAINER_ENDPOINT_ID }}
       docker_host_ip: '192.168.11.2'
-      ssh_user: 'root'
+      ssh_user: 'deploy'
       git_branch: develop
       compose_file_path: 'docker/docker-compose.yaml'
     secrets:
@@ -87,7 +87,7 @@ jobs:
       portainer_url: ${{ vars.PORTAINER_URL }}
       portainer_endpoint_id: ${{ vars.PORTAINER_ENDPOINT_ID }}
       docker_host_ip: '192.168.11.2'
-      ssh_user: 'root'
+      ssh_user: 'deploy'
       git_branch: main
       compose_file_path: 'docker/docker-compose.yaml'
     secrets:

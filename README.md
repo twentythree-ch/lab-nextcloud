@@ -85,13 +85,129 @@ ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_actions_key
 
 1. Copy the **public key** to Docker host:
    ```bash
-   ssh-copy-id -i ~/.ssh/github_actions_key.pub root@192.168.11.2
+   ssh-copy-id -i ~/.ssh/github_actions_key.pub deploy@192.168.11.2
    ```
 
 2. Add the **private key** to GitHub:
    - Go to Organization Settings → Secrets and variables → Actions
    - New secret: `SSH_PRIVATE_KEY`
    - Paste the entire private key (including `-----BEGIN/END-----` lines)
+
+### Docker Host Configuration
+
+The Docker host must be properly configured before automated deployments:
+
+#### Required Docker Networks
+
+Create the `external-services` network (if not already exists):
+
+```bash
+docker network create --driver bridge --subnet 172.25.0.0/24 external-services
+```
+
+Verify it exists:
+```bash
+docker network ls | grep external-services
+```
+
+#### Directory Permissions
+
+The workflow creates directories automatically, but ensure the SSH user has permissions:
+
+```bash
+# Ensure /data exists and is writable
+sudo mkdir -p /data
+sudo chown root:root /data
+sudo chmod 755 /data
+```
+
+The GitHub Actions workflow will create environment-specific directories:
+- `/data/lab-nextcloud-development/`
+- `/data/lab-nextcloud-production/`
+
+Each with subdirectories: `db/`, `nextcloud/`, `caddy_data/`, `caddy_config/`
+
+**Permissions set by workflow:**
+- Directories: `755` (rwxr-xr-x)
+- Config files: `644` (rw-r--r--)
+
+#### SSH User Requirements
+
+For security, use a dedicated deployment user instead of root:
+
+**Create the deploy user:**
+```bash
+# On the Docker host
+sudo useradd -m -s /bin/bash deploy
+
+# Create /data directory and set ownership
+sudo mkdir -p /data
+sudo chown deploy:deploy /data
+sudo chmod 755 /data
+
+# Add deploy user to docker group (if needed for direct Docker access)
+sudo usermod -aG docker deploy
+```
+
+**Configure sudo access (minimal permissions):**
+```bash
+# Create sudoers file for deploy user
+sudo visudo -f /etc/sudoers.d/deploy
+```
+
+Add the following lines:
+```
+# Allow deploy user to manage /data directory without password
+deploy ALL=(ALL) NOPASSWD: /bin/mkdir -p /data/*, /bin/chmod * /data/*, /bin/chown * /data/*
+```
+
+**Setup SSH key authentication:**
+```bash
+# Switch to deploy user
+sudo su - deploy
+
+# Create .ssh directory
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+
+# Add your GitHub Actions public key (generated earlier)
+# This will be done automatically by ssh-copy-id command
+```
+
+**Required permissions for deploy user:**
+- ✅ Write access to `/data/` directory (owner or group member)
+- ✅ Ability to create subdirectories under `/data/`
+- ✅ SSH key authentication enabled
+- ✅ Limited sudo for mkdir, chmod, chown operations on `/data/*`
+
+**Verify setup:**
+```bash
+# Test SSH access
+ssh deploy@192.168.11.2 "mkdir -p /data/test && ls -la /data/"
+
+# Test sudo (should not require password)
+ssh deploy@192.168.11.2 "sudo mkdir -p /data/test-sudo"
+```
+
+#### NetBird Access
+
+The Docker host must be:
+- ✅ Connected to the same NetBird network as GitHub Actions
+- ✅ Reachable at IP `192.168.11.2` (or update `docker_host_ip` in workflow)
+- ✅ Accessible via the configured Portainer URL through NetBird tunnel
+
+#### Portainer Configuration
+
+Ensure Portainer:
+- ✅ Is accessible at the configured `PORTAINER_URL`
+- ✅ Has API access enabled
+- ✅ Has the correct endpoint ID (typically `2`, stored in `PORTAINER_ENDPOINT_ID`)
+- ✅ Can pull from GitHub (requires `GH_PAT` with repo read access)
+
+Test Portainer API access:
+```bash
+curl -H "X-API-Key: YOUR_TOKEN" https://portainer-url/api/endpoints
+```
 
 ## Prerequisites
 
