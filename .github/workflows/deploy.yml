@@ -30,7 +30,7 @@ jobs:
           ]'
 
       - name: Deploy stack
-        uses: twentythree-ch/github-workflows/.github/actions/deploy-stack@main
+        uses: twentythree-ch/.github/actions/deploy-stack@main
         with:
           environment: development
           netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
