@@ -38,6 +38,10 @@ on:
         required: false
         type: string
         default: 'docker/docker-compose.yml'
+      nextcloud_domain:
+        description: 'Nextcloud domain'
+        required: true
+        type: string
     secrets:
       netbird_setup_key:
         description: 'NetBird setup key for tunnel'
@@ -59,9 +63,6 @@ on:
         required: true
       redis_password:
         description: 'Redis password'
-        required: true
-      nextcloud_domain:
-        description: 'Nextcloud domain'
         required: true
 
 jobs:
@@ -131,7 +132,7 @@ jobs:
           
           echo "Copying nextcloud-config.php..."
           # Update domain in config before copying
-          sed "s|cloud.vansummeren.ch|${{ secrets.nextcloud_domain }}|g" docker/nextcloud-config.php > /tmp/nextcloud-config.php
+          sed "s|cloud.vansummeren.ch|${{ inputs.nextcloud_domain }}|g" docker/nextcloud-config.php > /tmp/nextcloud-config.php
           scp /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/nextcloud-config.php
           
           echo "Setting permissions..."
@@ -172,7 +173,7 @@ jobs:
                 {"name": "CLOUDFLARE_TUNNEL_TOKEN", "value": "${{ secrets.cloudflare_tunnel_token }}"},
                 {"name": "DB_PASSWORD", "value": "${{ secrets.db_password }}"},
                 {"name": "REDIS_PASSWORD", "value": "${{ secrets.redis_password }}"},
-                {"name": "NEXTCLOUD_DOMAIN", "value": "${{ secrets.nextcloud_domain }}"}
+                {"name": "NEXTCLOUD_DOMAIN", "value": "${{ inputs.nextcloud_domain }}"}
               ],
               "Prune": false,
               "PullImage": true
@@ -188,9 +189,10 @@ jobs:
           sed "s|/data/lab-nextcloud|/data/${{ inputs.stack_name }}|g" ${{ inputs.compose_file_path }} > "$TEMP_COMPOSE"
           
           # Create stack from Git repository
-          curl -X POST \
+          RESPONSE=$(curl -X POST \
             -H "X-API-Key: ${{ secrets.portainer_token }}" \
             -H "Content-Type: application/json" \
+            -w "\nHTTP_STATUS:%{http_code}" \
             "${{ inputs.portainer_url }}/api/stacks?type=2&method=repository&endpointId=${{ inputs.portainer_endpoint_id }}" \
             -d '{
               "Name": "${{ inputs.stack_name }}",
@@ -206,7 +208,21 @@ jobs:
                 {"name": "REDIS_PASSWORD", "value": "${{ secrets.redis_password }}"},
                 {"name": "NEXTCLOUD_DOMAIN", "value": "${{ secrets.nextcloud_domain }}"}
               ]
-            }'
+            }')
+          
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | sed 's/.*HTTP_STATUS://')
+          BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS:/d')
+          
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          
+          if [[ "$HTTP_STATUS" -ge 200 && "$HTTP_STATUS" -lt 300 ]]; then
+            echo "Stack created successfully"
+          else
+            echo "ERROR: Failed to create stack"
+            echo "Full response: $RESPONSE"
+            exit 1
+          fi
       
       - name: Wait for stack deployment
         run: |

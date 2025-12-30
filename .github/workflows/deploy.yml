@@ -68,6 +68,7 @@ jobs:
       ssh_user: 'deploy'
       git_branch: ${{ github.event.inputs.git_branch || 'develop' }}
       compose_file_path: 'docker/docker-compose.yml'
+      nextcloud_domain: ${{ vars.NEXTCLOUD_DOMAIN }}
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
       portainer_token: ${{ secrets.PORTAINER_TOKEN }}
@@ -76,8 +77,6 @@ jobs:
       cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
       db_password: ${{ secrets.DB_PASSWORD }}
       redis_password: ${{ secrets.REDIS_PASSWORD }}
-      nextcloud_domain: ${{ secrets.NEXTCLOUD_DOMAIN }}
-
   deploy-production:
     needs: [determine-environment, deploy-development]
     if: |
@@ -94,6 +93,7 @@ jobs:
       ssh_user: 'deploy'
       git_branch: ${{ github.event.inputs.git_branch || 'main' }}
       compose_file_path: 'docker/docker-compose.yml'
+      nextcloud_domain: ${{ vars.NEXTCLOUD_DOMAIN }}
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
       portainer_token: ${{ secrets.PORTAINER_TOKEN }}
@@ -102,4 +102,3 @@ jobs:
       cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
       db_password: ${{ secrets.DB_PASSWORD }}
       redis_password: ${{ secrets.REDIS_PASSWORD }}
-      nextcloud_domain: ${{ secrets.NEXTCLOUD_DOMAIN }}
