@@ -207,7 +207,7 @@ jobs:
           echo "Response Body:"
           echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
           
-          if [[ "$HTTP_STATUS" -ge 200 && "$HTTP_STATUS" -lt 300 ]]; then
+          if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
             echo "Stack created successfully"
           else
             echo "ERROR: Failed to create stack"
