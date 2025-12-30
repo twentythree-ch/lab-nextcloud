@@ -15,10 +15,6 @@ on:
           - development
           - production
           - both
-      git_branch:
-        description: 'Git branch to deploy from (leave empty to use default)'
-        required: false
-        type: string
 
 jobs:
   determine-environment:
@@ -66,7 +62,7 @@ jobs:
       portainer_endpoint_id: ${{ vars.PORTAINER_ENDPOINT_ID }}
       docker_host_ip: '192.168.11.2'
       ssh_user: 'deploy'
-      git_branch: ${{ github.event.inputs.git_branch || 'develop' }}
+      git_branch: develop
       compose_file_path: 'docker/docker-compose.yaml'
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
@@ -92,7 +88,7 @@ jobs:
       portainer_endpoint_id: ${{ vars.PORTAINER_ENDPOINT_ID }}
       docker_host_ip: '192.168.11.2'
       ssh_user: 'deploy'
-      git_branch: ${{ github.event.inputs.git_branch || 'main' }}
+      git_branch: main
       compose_file_path: 'docker/docker-compose.yaml'
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
