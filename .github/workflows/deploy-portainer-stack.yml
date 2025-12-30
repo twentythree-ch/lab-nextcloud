@@ -146,62 +146,66 @@ jobs:
         run: |
           echo "Updating existing stack ID: ${{ steps.check_stack.outputs.stack_id }}"
           
-          # Trigger Git pull and redeploy
-          curl -X PUT \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT \
             -H "X-API-Key: ${{ secrets.portainer_token }}" \
             -H "Content-Type: application/json" \
             "${{ inputs.portainer_url }}/api/stacks/${{ steps.check_stack.outputs.stack_id }}/git/redeploy?endpointId=${{ inputs.portainer_endpoint_id }}" \
             -d '{
-              "RepositoryReferenceName": "${{ inputs.git_branch }}",
-              "RepositoryAuthentication": true,
-              "RepositoryUsername": "vansummeren",
-              "RepositoryPassword": "${{ secrets.gh_pat }}",
-              "Env": [
+              "repositoryReferenceName": "refs/heads/${{ inputs.git_branch }}",
+              "repositoryAuthentication": true,
+              "repositoryUsername": "vansummeren",
+              "repositoryPassword": "${{ secrets.gh_pat }}",
+              "env": [
                 {"name": "CLOUDFLARE_TUNNEL_TOKEN", "value": "${{ secrets.cloudflare_tunnel_token }}"},
                 {"name": "DB_PASSWORD", "value": "${{ secrets.db_password }}"},
                 {"name": "REDIS_PASSWORD", "value": "${{ secrets.redis_password }}"},
                 {"name": "NEXTCLOUD_DOMAIN", "value": "${{ vars.NEXTCLOUD_DOMAIN }}"}
               ],
-              "Prune": false,
-              "PullImage": true
-            }' || echo "Update failed, will try to recreate"
+              "prune": false,
+              "pullImage": true
+            }')
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP Status: $HTTP_CODE"
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "Stack updated successfully"
+          else
+            echo "Update failed (HTTP $HTTP_CODE): $BODY"
+          fi
       
       - name: Create new stack
         if: steps.check_stack.outputs.exists == 'false'
         run: |
           echo "Creating new stack: ${{ inputs.stack_name }}"
           
-          # Prepare compose file path - update volume paths for environment
-          TEMP_COMPOSE=$(mktemp)
-          sed "s|/data/lab-nextcloud|/data/${{ inputs.stack_name }}|g" ${{ inputs.compose_file_path }} > "$TEMP_COMPOSE"
-          
-          # Create stack from Git repository
-          RESPONSE=$(curl -X POST \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ inputs.portainer_url }}/api/stacks/create/standalone/repository?endpointId=${{ inputs.portainer_endpoint_id }}" \
             -H "X-API-Key: ${{ secrets.portainer_token }}" \
             -H "Content-Type: application/json" \
-            -w "\nHTTP_STATUS:%{http_code}" \
-            "${{ inputs.portainer_url }}/api/stacks?type=2&method=repository&endpointId=${{ inputs.portainer_endpoint_id }}" \
-            -d '{
-              "Name": "${{ inputs.stack_name }}",
-              "RepositoryURL": "https://github.com/${{ github.repository }}",
-              "RepositoryReferenceName": "refs/heads/${{ inputs.git_branch }}",
-              "ComposeFile": "${{ inputs.compose_file_path }}",
-              "RepositoryAuthentication": true,
-              "RepositoryUsername": "vansummeren",
-              "RepositoryPassword": "${{ secrets.gh_pat }}",
-              "Env": [
-                {"name": "CLOUDFLARE_TUNNEL_TOKEN", "value": "${{ secrets.cloudflare_tunnel_token }}"},
-                {"name": "DB_PASSWORD", "value": "${{ secrets.db_password }}"},
-                {"name": "REDIS_PASSWORD", "value": "${{ secrets.redis_password }}"},
-                {"name": "NEXTCLOUD_DOMAIN", "value": "${{ vars.NEXTCLOUD_DOMAIN }}"}
-              ]
-            }')
+            -d "{
+              \"name\": \"${{ inputs.stack_name }}\",
+              \"repositoryURL\": \"https://github.com/${{ github.repository }}\",
+              \"repositoryReferenceName\": \"refs/heads/${{ inputs.git_branch }}\",
+              \"composeFile\": \"${{ inputs.compose_file_path }}\",
+              \"env\": [
+                {\"name\": \"CLOUDFLARE_TUNNEL_TOKEN\", \"value\": \"${{ secrets.cloudflare_tunnel_token }}\"},
+                {\"name\": \"DB_PASSWORD\", \"value\": \"${{ secrets.db_password }}\"},
+                {\"name\": \"REDIS_PASSWORD\", \"value\": \"${{ secrets.redis_password }}\"},
+                {\"name\": \"NEXTCLOUD_DOMAIN\", \"value\": \"${{ vars.NEXTCLOUD_DOMAIN }}\"}
+              ],
+              \"repositoryAuthentication\": true,
+              \"repositoryUsername\": \"vansummeren\",
+              \"repositoryPassword\": \"${{ secrets.gh_pat }}\"
+            }")
           
-          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | sed 's/.*HTTP_STATUS://')
-          BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS:/d')
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
           
-          echo "HTTP Status: $HTTP_STATUS"
-          echo "Response: $BODY"
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response Body:"
+          echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
           
           if [[ "$HTTP_STATUS" -ge 200 && "$HTTP_STATUS" -lt 300 ]]; then
             echo "Stack created successfully"
