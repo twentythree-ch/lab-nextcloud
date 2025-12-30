@@ -1,6 +1,6 @@
 # Nextcloud with Cloudflare Tunnel - Portainer Stack
 
-This repository contains a Docker Compose stack for running Nextcloud with a Cloudflare Tunnel, designed to be deployed via Portainer.
+This repository contains a Docker Compose stack for running Nextcloud with a Cloudflare Tunnel, designed to be deployed via Portainer with automated GitHub Actions CI/CD.
 
 ## Architecture
 
@@ -10,10 +10,88 @@ This repository contains a Docker Compose stack for running Nextcloud with a Clo
 - **Caddy**: Reverse proxy and web server
 - **Cloudflared**: Cloudflare Tunnel for secure external access
 
+## Deployment Options
+
+This stack supports two deployment methods:
+
+1. **Automated CI/CD (Recommended)**: Push to `develop` or `main` branch triggers automatic deployment via GitHub Actions
+2. **Manual Portainer**: Deploy directly through Portainer UI
+
 ## Network Configuration
 
 - **internal**: Internal network for communication between services (isolated)
 - **external-services**: Your existing bridge network (172.25.0.0/24) for outbound connectivity
+
+## GitHub Actions CI/CD Setup
+
+### Required Secrets and Variables
+
+Configure the following in your GitHub repository:
+
+#### Organization-Level Secrets
+These are shared across all repositories in your organization:
+
+- `NETBIRD_SETUP_KEY` - NetBird tunnel connection key for secure access to Portainer
+- `PORTAINER_TOKEN` - API token for Portainer access
+- `GH_PAT` - GitHub Personal Access Token for Portainer Git integration
+- `SSH_PRIVATE_KEY` - SSH private key for SCP access to Docker host
+
+#### Organization-Level Variables
+
+- `PORTAINER_URL` - Portainer URL accessible via NetBird (e.g., `https://portainer-dev.twentythree.ch`)
+- `PORTAINER_ENDPOINT_ID` - Portainer endpoint ID (typically `2`)
+
+#### Environment-Level Secrets
+Configure these separately for each environment (`development` and `production`):
+
+**Settings → Environments → [environment name] → Add secret**
+
+- `CLOUDFLARE_TUNNEL_TOKEN` - Cloudflare Tunnel token (different per environment)
+- `DB_PASSWORD` - PostgreSQL password (different per environment)
+- `REDIS_PASSWORD` - Redis password (different per environment)
+- `NEXTCLOUD_DOMAIN` - Nextcloud domain name (different per environment)
+
+#### Environment Protection Rules
+
+**Production environment** (Settings → Environments → production):
+- ✅ Enable **Required reviewers** and add approvers
+- ✅ Optionally set **Wait timer** for additional safety
+
+**Development environment**: No protection rules needed for automatic deployment
+
+### Deployment Workflow
+
+The GitHub Actions workflow automatically deploys based on branch:
+
+- **Push to `develop`** → Deploys to `development` environment
+- **Push to `main`** → Deploys to `production` environment (requires approval)
+- **Manual dispatch** → Choose specific environment via Actions tab
+
+**Stack naming:**
+- Development: `lab-nextcloud-development`
+- Production: `lab-nextcloud-production`
+
+**Data directories on host:**
+- Development: `/data/lab-nextcloud-development/`
+- Production: `/data/lab-nextcloud-production/`
+
+### SSH Key Setup for CI/CD
+
+Generate an SSH key pair for GitHub Actions:
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_actions_key
+```
+
+1. Copy the **public key** to Docker host:
+   ```bash
+   ssh-copy-id -i ~/.ssh/github_actions_key.pub root@192.168.11.2
+   ```
+
+2. Add the **private key** to GitHub:
+   - Go to Organization Settings → Secrets and variables → Actions
+   - New secret: `SSH_PRIVATE_KEY`
+   - Paste the entire private key (including `-----BEGIN/END-----` lines)
 
 ## Prerequisites
 
@@ -42,7 +120,24 @@ This repository contains a Docker Compose stack for running Nextcloud with a Clo
 
 ## Setup Instructions
 
-### 5. Configure Cloudflare Tunnel
+### Automated Deployment (GitHub Actions)
+
+Once secrets are configured (see "GitHub Actions CI/CD Setup" above):
+
+1. **Initial setup**: Ensure Docker host has `/data` directory and proper permissions
+2. **Commit and push** to `develop` branch → auto-deploys to development
+3. **Merge to `main`** → triggers production deployment (requires approval)
+4. **Monitor**: Check Actions tab for deployment status
+
+The workflow automatically:
+- Connects via NetBird tunnel
+- Creates host directories
+- Copies configuration files
+- Creates or updates Portainer stack
+
+### Manual Deployment via Portainer
+
+#### 5. Configure Cloudflare Tunnel
 
 **IMPORTANT**: Use the IP address of the Caddy container, NOT the hostname, to avoid port resolution issues.
 
@@ -57,7 +152,7 @@ This repository contains a Docker Compose stack for running Nextcloud with a Clo
    
    **Why use IP instead of hostname?** Using `caddy:80` can cause Cloudflare Tunnel to incorrectly resolve ports, leading to redirect issues. Using the IP address directly avoids this problem.
 
-### 2. Prepare Your Repository
+#### 2. Prepare Your Repository
 
 1. Create a new GitHub repository
 2. Add these files to the repository:
@@ -84,7 +179,7 @@ Edit `.env` with your values:
 
 **Security Note**: Add `.env` to `.gitignore` to prevent committing secrets!
 
-### 4. Deploy with Portainer
+#### 4. Deploy with Portainer
 
 #### Option A: Deploy from Git Repository
 
@@ -98,7 +193,7 @@ Edit `.env` with your values:
    - Or use "Load variables from .env file" if you have the `.env` file
 7. Deploy the stack
 
-#### Option B: Deploy from Web Editor
+##### Option B: Deploy from Web Editor
 
 1. In Portainer, go to **Stacks** > **Add stack**
 2. Choose **Web editor**
@@ -106,14 +201,14 @@ Edit `.env` with your values:
 4. Add environment variables in the UI
 5. Deploy the stack
 
-### 5. Initial Nextcloud Setup
+#### 5. Initial Nextcloud Setup
 
 1. Wait for all containers to start (check logs in Portainer)
 2. Access Nextcloud through your domain (e.g., https://cloud.example.com)
 3. Create an admin account on first access
 4. Nextcloud will automatically configure itself with PostgreSQL and Redis
 
-### 6. Post-Installation Configuration
+#### 6. Post-Installation Configuration
 
 After initial setup, you may want to configure:
 
