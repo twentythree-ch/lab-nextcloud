@@ -126,7 +126,7 @@ jobs:
           scp /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/nextcloud-config.php
           
           echo "Setting final ownership and permissions..."
-          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "sudo chown -R root:root /data/${{ inputs.stack_name }} && sudo chmod -R 755 /data/${{ inputs.stack_name }} && sudo chmod 644 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php} && sudo chmod 777 /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config}"
+          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "sudo chown -R root:root /data/${{ inputs.stack_name }} && sudo chmod -R 777 /data/${{ inputs.stack_name }} && sudo chmod 777 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php} && sudo chmod 777 /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config}"
       
       - name: Check if stack exists
         id: check_stack
