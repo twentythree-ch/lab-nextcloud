@@ -111,7 +111,7 @@ jobs:
       - name: Prepare host directories on Docker host
         run: |
           echo "Creating data directories on Docker host..."
-          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "sudo mkdir -p /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config} && sudo chown -R root:root /data/${{ inputs.stack_name }} && sudo chmod -R 777 /data/${{ inputs.stack_name }}"
+          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "sudo mkdir -p /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config} && sudo chmod 777 /data/${{ inputs.stack_name }} /data/${{ inputs.stack_name }}/* || true"
           
           echo "Ensuring external-services network exists..."
           ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "docker network ls | grep -q external-services || docker network create --driver bridge external-services"
@@ -119,14 +119,14 @@ jobs:
       - name: Copy configuration files to Docker host
         run: |
           echo "Copying Caddyfile..."
-          scp docker/Caddyfile ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/tmp/Caddyfile
+          scp docker/Caddyfile ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/Caddyfile
           
           echo "Copying nextcloud-config.php..."
           sed "s|cloud.vansummeren.ch|${{ vars.NEXTCLOUD_DOMAIN }}|g" docker/nextcloud-config.php > /tmp/nextcloud-config.php
-          scp /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/tmp/nextcloud-config.php
+          scp /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/nextcloud-config.php
           
-          echo "Moving files to final location with proper permissions..."
-          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "sudo mv /tmp/Caddyfile /data/${{ inputs.stack_name }}/Caddyfile && sudo mv /tmp/nextcloud-config.php /data/${{ inputs.stack_name }}/nextcloud-config.php && sudo chmod 644 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php}"
+          echo "Setting final ownership and permissions..."
+          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "sudo chown -R root:root /data/${{ inputs.stack_name }} && sudo chmod -R 755 /data/${{ inputs.stack_name }} && sudo chmod 644 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php} && sudo chmod 777 /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config}"
       
       - name: Check if stack exists
         id: check_stack
