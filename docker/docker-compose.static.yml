@@ -4,7 +4,7 @@ services:
     image: nginx:alpine
     restart: unless-stopped
     volumes:
-      - ${DATA_PATH}/html:/usr/share/nginx/html:ro
+      - /data/lab-nextcloud-static/html:/usr/share/nginx/html:ro
     environment:
       - NEXTCLOUD_DOMAIN=${NEXTCLOUD_DOMAIN}
     networks:
@@ -32,7 +32,7 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${DATA_PATH}/html
+      device: /data/lab-nextcloud-static/html
 
 networks:
   internal:
