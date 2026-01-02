@@ -159,7 +159,8 @@ jobs:
                 {"name": "CLOUDFLARE_TUNNEL_TOKEN", "value": "${{ secrets.cloudflare_tunnel_token }}"},
                 {"name": "DB_PASSWORD", "value": "${{ secrets.db_password }}"},
                 {"name": "REDIS_PASSWORD", "value": "${{ secrets.redis_password }}"},
-                {"name": "NEXTCLOUD_DOMAIN", "value": "${{ vars.NEXTCLOUD_DOMAIN }}"}
+                {"name": "NEXTCLOUD_DOMAIN", "value": "${{ vars.NEXTCLOUD_DOMAIN }}"},
+                {"name": "DATA_PATH", "value": "/data/${{ inputs.stack_name }}"}
               ],
               "prune": false,
               "pullImage": true
@@ -193,7 +194,8 @@ jobs:
                 {\"name\": \"CLOUDFLARE_TUNNEL_TOKEN\", \"value\": \"${{ secrets.cloudflare_tunnel_token }}\"},
                 {\"name\": \"DB_PASSWORD\", \"value\": \"${{ secrets.db_password }}\"},
                 {\"name\": \"REDIS_PASSWORD\", \"value\": \"${{ secrets.redis_password }}\"},
-                {\"name\": \"NEXTCLOUD_DOMAIN\", \"value\": \"${{ vars.NEXTCLOUD_DOMAIN }}\"}
+                {\"name\": \"NEXTCLOUD_DOMAIN\", \"value\": \"${{ vars.NEXTCLOUD_DOMAIN }}\"},
+                {\"name\": \"DATA_PATH\", \"value\": \"/data/${{ inputs.stack_name }}\"}
               ],
               \"repositoryAuthentication\": true,
               \"repositoryUsername\": \"vansummeren\",
