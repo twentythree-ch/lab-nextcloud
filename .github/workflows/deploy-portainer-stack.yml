@@ -119,14 +119,14 @@ jobs:
       - name: Copy configuration files to Docker host
         run: |
           echo "Copying Caddyfile..."
-          scp docker/Caddyfile ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/Caddyfile
+          scp docker/Caddyfile ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/tmp/Caddyfile
           
           echo "Copying nextcloud-config.php..."
           sed "s|cloud.vansummeren.ch|${{ vars.NEXTCLOUD_DOMAIN }}|g" docker/nextcloud-config.php > /tmp/nextcloud-config.php
-          scp /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/nextcloud-config.php
+          scp /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/tmp/nextcloud-config.php
           
-          echo "Setting permissions..."
-          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "chmod 644 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php}"
+          echo "Moving files to final location with proper permissions..."
+          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "sudo mv /tmp/Caddyfile /data/${{ inputs.stack_name }}/Caddyfile && sudo mv /tmp/nextcloud-config.php /data/${{ inputs.stack_name }}/nextcloud-config.php && sudo chmod 644 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php}"
       
       - name: Check if stack exists
         id: check_stack
