@@ -111,7 +111,7 @@ jobs:
       - name: Prepare host directories on Docker host
         run: |
           echo "Creating data directories on Docker host..."
-          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "mkdir -p /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config} && chmod -R 777 /data/${{ inputs.stack_name }}"
+          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "sudo mkdir -p /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config} && sudo chown -R root:root /data/${{ inputs.stack_name }} && sudo chmod -R 777 /data/${{ inputs.stack_name }}"
           
           echo "Ensuring external-services network exists..."
           ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "docker network ls | grep -q external-services || docker network create --driver bridge external-services"
