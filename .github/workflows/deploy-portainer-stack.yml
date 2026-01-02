@@ -193,6 +193,7 @@ jobs:
               \"repositoryURL\": \"https://github.com/${{ github.repository }}\",
               \"repositoryReferenceName\": \"refs/heads/${{ inputs.git_branch }}\",
               \"composeFile\": \"${{ inputs.compose_file_path }}\",
+              \"pullImage\": true,
               \"env\": [
                 {\"name\": \"CLOUDFLARE_TUNNEL_TOKEN\", \"value\": \"${{ secrets.cloudflare_tunnel_token }}\"},
                 {\"name\": \"DB_PASSWORD\", \"value\": \"${{ secrets.db_password }}\"},
