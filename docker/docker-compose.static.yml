@@ -1,0 +1,43 @@
+services:
+  # Nginx for serving static website
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ${DATA_PATH}/html:/usr/share/nginx/html:ro
+    environment:
+      - NEXTCLOUD_DOMAIN=${NEXTCLOUD_DOMAIN}
+    networks:
+      - internal
+      - external-services
+    ports:
+      - "80:80"
+
+  # Cloudflare Tunnel
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - internal
+      - external-services
+    environment:
+      - TUNNEL_TRANSPORT_PROTOCOL=http2
+    depends_on:
+      - nginx
+
+volumes:
+  html:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH}/html
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+  external-services:
+    external: true
+    name: external-services
