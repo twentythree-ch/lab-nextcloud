@@ -184,7 +184,7 @@ jobs:
         run: |
           echo "Creating new stack: ${{ inputs.stack_name }}"
           
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+          RESPONSE=$(curl -v -w "\n%{http_code}" -X POST \
             "${{ inputs.portainer_url }}/api/stacks/create/standalone/repository?endpointId=${{ inputs.portainer_endpoint_id }}" \
             -H "X-API-Key: ${{ secrets.portainer_token }}" \
             -H "Content-Type: application/json" \
@@ -204,7 +204,7 @@ jobs:
               \"repositoryAuthentication\": true,
               \"repositoryUsername\": \"vansummeren\",
               \"repositoryPassword\": \"${{ secrets.gh_pat }}\"
-            }")
+            }" 2>&1)
           
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | sed '$d')
@@ -216,8 +216,9 @@ jobs:
           if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
             echo "Stack created successfully"
           else
-            echo "ERROR: Failed to create stack"
-            echo "Full response: $RESPONSE"
+            echo "ERROR: Failed to create stack (HTTP $HTTP_CODE)"
+            echo "Full response:"
+            echo "$RESPONSE"
             exit 1
           fi
       
