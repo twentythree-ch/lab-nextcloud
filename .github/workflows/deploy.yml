@@ -1,10 +1,10 @@
 name: Deploy to Portainer
 
 on:
-  push:
-    branches:
-      - main
-      - develop
+  # push:
+  #   branches:
+  #     - main
+  #     - develop
   workflow_dispatch:
     inputs:
       environment:
