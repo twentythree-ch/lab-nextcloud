@@ -40,24 +40,60 @@ jobs:
   deploy-development:
     needs: determine-environment
     if: needs.determine-environment.outputs.deploy_dev == 'true'
-    uses: ./.github/workflows/deploy-portainer-stack.yml
-    with:
-      environment: development
-      stack_name: lab-static-development
-      portainer_url: ${{ vars.PORTAINER_URL }}
-      portainer_endpoint_id: ${{ vars.PORTAINER_ENDPOINT_ID }}
-      docker_host_ip: '192.168.11.2'
-      ssh_user: 'deploy'
-      git_branch: develop
-      compose_file_path: 'docker/docker-compose.static.yml'
-    secrets:
-      netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
-      portainer_token: ${{ secrets.PORTAINER_TOKEN }}
-      gh_pat: ${{ secrets.GH_PAT }}
-      ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-      cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
-      db_password: ${{ secrets.DB_PASSWORD }}
-      redis_password: ${{ secrets.REDIS_PASSWORD }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          echo "ENVIRONMENT=development" >> $GITHUB_ENV
+          echo "STACK_NAME=lab-static-development" >> $GITHUB_ENV
+          echo "COMPOSE_FILE_PATH=docker/docker-compose.static.yml" >> $GITHUB_ENV
+          echo "GIT_BRANCH=develop" >> $GITHUB_ENV
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          client-secret: ${{ secrets.ARM_CLIENT_SECRET }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+
+      - name: Terraform Init
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: |
+          terraform init -input=false \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.AZURE_TF_STATE_CONTAINER }}" \
+            -backend-config="key=lab-nextcloud/${{ env.ENVIRONMENT }}.tfstate" \
+            -backend-config="use_azuread_auth=true"
+
+      - name: Terraform Plan
+        working-directory: terraform
+        env:
+          PORTAINER_TOKEN: ${{ secrets.PORTAINER_TOKEN }}
+        run: |
+          terraform plan -input=false -var="environment=development" -var="terraform_state_rg=${{ vars.AZURE_TF_STATE_RG }}" -var="terraform_state_sa=${{ vars.AZURE_TF_STATE_ACCOUNT }}" -var="terraform_state_container=${{ vars.AZURE_TF_STATE_CONTAINER }}" -var="portainer_url=${{ vars.PORTAINER_URL }}" -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" -var="stack_name=lab-static-development" -var="compose_file_path=docker/docker-compose.static.yml" -var="git_branch=develop" -var="git_sha=${{ github.sha }}"
+
+      - name: Terraform Apply
+        if: success()
+        working-directory: terraform
+        env:
+          PORTAINER_TOKEN: ${{ secrets.PORTAINER_TOKEN }}
+        run: |
+          terraform apply -input=false -auto-approve -var="environment=development" -var="terraform_state_rg=${{ vars.AZURE_TF_STATE_RG }}" -var="terraform_state_sa=${{ vars.AZURE_TF_STATE_ACCOUNT }}" -var="terraform_state_container=${{ vars.AZURE_TF_STATE_CONTAINER }}" -var="portainer_url=${{ vars.PORTAINER_URL }}" -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" -var="stack_name=lab-static-development" -var="compose_file_path=docker/docker-compose.static.yml" -var="git_branch=develop" -var="git_sha=${{ github.sha }}"
 
   deploy-production:
     needs: [determine-environment, deploy-development]
@@ -65,21 +101,57 @@ jobs:
       always() &&
       needs.determine-environment.outputs.deploy_prod == 'true' &&
       (needs.deploy-development.result == 'success' || needs.deploy-development.result == 'skipped')
-    uses: ./.github/workflows/deploy-portainer-stack.yml
-    with:
-      environment: production
-      stack_name: lab-static-production
-      portainer_url: ${{ vars.PORTAINER_URL }}
-      portainer_endpoint_id: ${{ vars.PORTAINER_ENDPOINT_ID }}
-      docker_host_ip: '192.168.11.2'
-      ssh_user: 'deploy'
-      git_branch: main
-      compose_file_path: 'docker/docker-compose.static.yml'
-    secrets:
-      netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
-      portainer_token: ${{ secrets.PORTAINER_TOKEN }}
-      gh_pat: ${{ secrets.GH_PAT }}
-      ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-      cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
-      db_password: ${{ secrets.DB_PASSWORD }}
-      redis_password: ${{ secrets.REDIS_PASSWORD }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          echo "ENVIRONMENT=production" >> $GITHUB_ENV
+          echo "STACK_NAME=lab-static-production" >> $GITHUB_ENV
+          echo "COMPOSE_FILE_PATH=docker/docker-compose.static.yml" >> $GITHUB_ENV
+          echo "GIT_BRANCH=main" >> $GITHUB_ENV
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          client-secret: ${{ secrets.ARM_CLIENT_SECRET }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+
+      - name: Terraform Init
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: |
+          terraform init -input=false \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.AZURE_TF_STATE_CONTAINER }}" \
+            -backend-config="key=lab-nextcloud/${{ env.ENVIRONMENT }}.tfstate" \
+            -backend-config="use_azuread_auth=true"
+
+      - name: Terraform Plan
+        working-directory: terraform
+        env:
+          PORTAINER_TOKEN: ${{ secrets.PORTAINER_TOKEN }}
+        run: |
+          terraform plan -input=false -var="environment=production" -var="terraform_state_rg=${{ vars.AZURE_TF_STATE_RG }}" -var="terraform_state_sa=${{ vars.AZURE_TF_STATE_ACCOUNT }}" -var="terraform_state_container=${{ vars.AZURE_TF_STATE_CONTAINER }}" -var="portainer_url=${{ vars.PORTAINER_URL }}" -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" -var="stack_name=lab-static-production" -var="compose_file_path=docker/docker-compose.static.yml" -var="git_branch=main" -var="git_sha=${{ github.sha }}"
+
+      - name: Terraform Apply
+        if: success()
+        working-directory: terraform
+        env:
+          PORTAINER_TOKEN: ${{ secrets.PORTAINER_TOKEN }}
+        run: |
+          terraform apply -input=false -auto-approve -var="environment=production" -var="terraform_state_rg=${{ vars.AZURE_TF_STATE_RG }}" -var="terraform_state_sa=${{ vars.AZURE_TF_STATE_ACCOUNT }}" -var="terraform_state_container=${{ vars.AZURE_TF_STATE_CONTAINER }}" -var="portainer_url=${{ vars.PORTAINER_URL }}" -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" -var="stack_name=lab-static-production" -var="compose_file_path=docker/docker-compose.static.yml" -var="git_branch=main" -var="git_sha=${{ github.sha }}"
