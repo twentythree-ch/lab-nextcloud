@@ -26,20 +26,30 @@ jobs:
       - name: Determine deployment environment(s)
         id: set-env
         run: |
-          case "${{ github.event.inputs.environment }}" in
-            "development")
-              echo 'deploy_dev=true' >> $GITHUB_OUTPUT
-              echo 'deploy_prod=false' >> $GITHUB_OUTPUT
-              ;;
-            "production")
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
               echo 'deploy_dev=false' >> $GITHUB_OUTPUT
               echo 'deploy_prod=true' >> $GITHUB_OUTPUT
-              ;;
-            "both")
+            elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
               echo 'deploy_dev=true' >> $GITHUB_OUTPUT
-              echo 'deploy_prod=true' >> $GITHUB_OUTPUT
-              ;;
-          esac
+              echo 'deploy_prod=false' >> $GITHUB_OUTPUT
+            fi
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            case "${{ github.event.inputs.environment }}" in
+              "development")
+                echo 'deploy_dev=true' >> $GITHUB_OUTPUT
+                echo 'deploy_prod=false' >> $GITHUB_OUTPUT
+                ;;
+              "production")
+                echo 'deploy_dev=false' >> $GITHUB_OUTPUT
+                echo 'deploy_prod=true' >> $GITHUB_OUTPUT
+                ;;
+              "both")
+                echo 'deploy_dev=true' >> $GITHUB_OUTPUT
+                echo 'deploy_prod=true' >> $GITHUB_OUTPUT
+                ;;
+            esac
+          fi
 
   deploy-development:
     needs: determine-environment
