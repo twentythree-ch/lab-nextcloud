@@ -53,6 +53,7 @@ jobs:
 
   deploy-development:
     needs: determine-environment
+    environment: development
     if: needs.determine-environment.outputs.deploy_dev == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -128,6 +129,7 @@ jobs:
 
   deploy-production:
     needs: [determine-environment, deploy-development]
+    environment: production
     if: |
       always() &&
       needs.determine-environment.outputs.deploy_prod == 'true' &&
