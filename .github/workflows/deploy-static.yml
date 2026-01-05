@@ -66,6 +66,24 @@ jobs:
           echo "COMPOSE_FILE_PATH=docker/docker-compose.static.yml" >> $GITHUB_ENV
           echo "GIT_BRANCH=develop" >> $GITHUB_ENV
 
+      - name: Verify variables & secrets
+        run: |
+          echo "Repository/Org variables:"
+          echo "AZURE_TF_STATE_ACCOUNT=${{ vars.AZURE_TF_STATE_ACCOUNT }}"
+          echo "AZURE_TF_STATE_RG=${{ vars.AZURE_TF_STATE_RG }}"
+          echo "AZURE_TF_STATE_CONTAINER=${{ vars.AZURE_TF_STATE_CONTAINER }}"
+          echo "ARM_CLIENT_ID=${{ vars.ARM_CLIENT_ID }}"
+          echo "ARM_SUBSCRIPTION_ID=${{ vars.ARM_SUBSCRIPTION_ID }}"
+          echo "ARM_TENANT_ID=${{ vars.ARM_TENANT_ID }}"
+          echo "PORTAINER_URL=${{ vars.PORTAINER_URL }}"
+          echo "PORTAINER_ENDPOINT_ID=${{ vars.PORTAINER_ENDPOINT_ID }}"
+          echo
+          echo "Secrets (lengths only):"
+          printf "ARM_CLIENT_SECRET length: %s\n" "$(echo -n "${{ secrets.ARM_CLIENT_SECRET }}" | wc -c)"
+          printf "PORTAINER_TOKEN length: %s\n" "$(echo -n "${{ secrets.PORTAINER_TOKEN }}" | wc -c)"
+          printf "NETBIRD_SETUP_KEY length: %s\n" "$(echo -n "${{ secrets.NETBIRD_SETUP_KEY }}" | wc -c)"
+          printf "SSH_PRIVATE_KEY length: %s\n" "$(echo -n "${{ secrets.SSH_PRIVATE_KEY }}" | wc -c)"
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -90,7 +108,7 @@ jobs:
             -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_ACCOUNT }}" \
             -backend-config="container_name=${{ vars.AZURE_TF_STATE_CONTAINER }}" \
-            -backend-config="key=lab-nextcloud/${{ env.ENVIRONMENT }}.tfstate" \
+            -backend-config="key=lab-nextcloud/$ENVIRONMENT.tfstate" \
             -backend-config="use_azuread_auth=true"
 
       - name: Terraform Plan
@@ -126,6 +144,24 @@ jobs:
           echo "COMPOSE_FILE_PATH=docker/docker-compose.static.yml" >> $GITHUB_ENV
           echo "GIT_BRANCH=main" >> $GITHUB_ENV
 
+      - name: Verify variables & secrets
+        run: |
+          echo "Repository/Org variables:"
+          echo "AZURE_TF_STATE_ACCOUNT=${{ vars.AZURE_TF_STATE_ACCOUNT }}"
+          echo "AZURE_TF_STATE_RG=${{ vars.AZURE_TF_STATE_RG }}"
+          echo "AZURE_TF_STATE_CONTAINER=${{ vars.AZURE_TF_STATE_CONTAINER }}"
+          echo "ARM_CLIENT_ID=${{ vars.ARM_CLIENT_ID }}"
+          echo "ARM_SUBSCRIPTION_ID=${{ vars.ARM_SUBSCRIPTION_ID }}"
+          echo "ARM_TENANT_ID=${{ vars.ARM_TENANT_ID }}"
+          echo "PORTAINER_URL=${{ vars.PORTAINER_URL }}"
+          echo "PORTAINER_ENDPOINT_ID=${{ vars.PORTAINER_ENDPOINT_ID }}"
+          echo
+          echo "Secrets (lengths only):"
+          printf "ARM_CLIENT_SECRET length: %s\n" "$(echo -n "${{ secrets.ARM_CLIENT_SECRET }}" | wc -c)"
+          printf "PORTAINER_TOKEN length: %s\n" "$(echo -n "${{ secrets.PORTAINER_TOKEN }}" | wc -c)"
+          printf "NETBIRD_SETUP_KEY length: %s\n" "$(echo -n "${{ secrets.NETBIRD_SETUP_KEY }}" | wc -c)"
+          printf "SSH_PRIVATE_KEY length: %s\n" "$(echo -n "${{ secrets.SSH_PRIVATE_KEY }}" | wc -c)"
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -150,7 +186,7 @@ jobs:
             -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_ACCOUNT }}" \
             -backend-config="container_name=${{ vars.AZURE_TF_STATE_CONTAINER }}" \
-            -backend-config="key=lab-nextcloud/${{ env.ENVIRONMENT }}.tfstate" \
+            -backend-config="key=lab-nextcloud/$ENVIRONMENT.tfstate" \
             -backend-config="use_azuread_auth=true"
 
       - name: Terraform Plan
