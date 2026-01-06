@@ -48,25 +48,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup NetBird tunnel
-        run: |
-          echo "Installing NetBird..."
-          curl -fsSL https://pkgs.netbird.io/install.sh | sh
-          
-          echo "Starting NetBird service..."
-          sudo netbird service stop || true
-          sudo netbird service start
-          sleep 3
-          
-          echo "Connecting to NetBird network..."
-          sudo netbird up --setup-key "${{ secrets.netbird_setup_key }}"
-          
-          echo "Waiting for connection..."
-          sleep 5
-          
-          echo "NetBird status:"
-          sudo netbird status
-
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -94,6 +75,25 @@ jobs:
             -backend-config="key=lab-nextcloud/${{ inputs.environment }}.tfstate" \
             -backend-config="use_oidc=true" \
             -backend-config="use_azuread_auth=true"
+
+      - name: Setup NetBird tunnel
+        run: |
+          echo "Installing NetBird..."
+          curl -fsSL https://pkgs.netbird.io/install.sh | sh
+          
+          echo "Starting NetBird service..."
+          sudo netbird service stop || true
+          sudo netbird service start
+          sleep 3
+          
+          echo "Connecting to NetBird network..."
+          sudo netbird up --setup-key "${{ secrets.netbird_setup_key }}"
+          
+          echo "Waiting for connection..."
+          sleep 5
+          
+          echo "NetBird status:"
+          sudo netbird status
 
       - name: Terraform Plan
         working-directory: terraform
