@@ -19,6 +19,10 @@ on:
         description: 'Git branch to deploy'
         required: true
         type: string
+      tf_state_key:
+        description: 'Terraform state file key (e.g., lab-nextcloud/development.tfstate)'
+        required: true
+        type: string
     secrets:
       portainer_token:
         description: 'Portainer API token'
@@ -75,7 +79,7 @@ jobs:
             -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_ACCOUNT }}" \
             -backend-config="container_name=${{ vars.AZURE_TF_STATE_CONTAINER }}" \
-            -backend-config="key=lab-nextcloud/${{ inputs.environment }}.tfstate" \
+            -backend-config="key=${{ inputs.tf_state_key }}" \
             -backend-config="use_oidc=true" \
             -backend-config="use_azuread_auth=true"
 

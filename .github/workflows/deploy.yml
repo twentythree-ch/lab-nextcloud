@@ -62,12 +62,13 @@ jobs:
   deploy-development:
     needs: determine-environment
     if: needs.determine-environment.outputs.deploy_dev == 'true'
-    uses: ./.github/workflows/deploy-terraform-stack.yml
+    uses: ./.github/workflows/_reusable-deploy-terraform-stack.yml
     with:
       environment: development
       stack_name: lab-nextcloud-development
       git_branch: ${{ github.event.inputs.git_branch || 'develop' }}
       compose_file_path: 'docker/docker-compose.yml'
+      tf_state_key: 'lab-nextcloud/development.tfstate'
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
       portainer_token: ${{ secrets.PORTAINER_TOKEN }}
@@ -82,12 +83,13 @@ jobs:
       always() &&
       needs.determine-environment.outputs.deploy_prod == 'true' &&
       (needs.deploy-development.result == 'success' || needs.deploy-development.result == 'skipped')
-    uses: ./.github/workflows/deploy-terraform-stack.yml
+    uses: ./.github/workflows/_reusable-deploy-terraform-stack.yml
     with:
       environment: production
       stack_name: lab-nextcloud-production
       git_branch: ${{ github.event.inputs.git_branch || 'main' }}
       compose_file_path: 'docker/docker-compose.yml'
+      tf_state_key: 'lab-nextcloud/production.tfstate'
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
       portainer_token: ${{ secrets.PORTAINER_TOKEN }}
