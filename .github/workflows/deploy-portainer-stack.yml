@@ -1,5 +1,8 @@
 name: Deploy Stack to Portainer (Reusable)
 
+# This workflow is a wrapper around deploy-terraform-stack.yml for backwards compatibility
+# It now uses Terraform with the Portainer provider instead of direct API calls
+
 on:
   workflow_call:
     inputs:
@@ -12,19 +15,22 @@ on:
         required: true
         type: string
       portainer_url:
-        description: 'Portainer URL (via NetBird)'
-        required: true
+        description: 'Portainer URL (via NetBird) - deprecated, use PORTAINER_URL variable instead'
+        required: false
         type: string
+        default: ''
       portainer_endpoint_id:
-        description: 'Portainer endpoint ID'
-        required: true
+        description: 'Portainer endpoint ID - deprecated, use PORTAINER_ENDPOINT_ID variable instead'
+        required: false
         type: string
+        default: ''
       docker_host_ip:
-        description: 'Docker host IP for SCP (NetBird internal)'
-        required: true
+        description: 'Docker host IP for SCP (NetBird internal) - deprecated, no longer used'
+        required: false
         type: string
+        default: ''
       ssh_user:
-        description: 'SSH user on Docker host'
+        description: 'SSH user on Docker host - deprecated, no longer used'
         required: false
         type: string
         default: 'deploy'
@@ -49,8 +55,8 @@ on:
         description: 'GitHub PAT for Portainer Git authentication'
         required: true
       ssh_private_key:
-        description: 'SSH private key for SCP to Docker host'
-        required: true
+        description: 'SSH private key - deprecated, no longer used'
+        required: false
       cloudflare_tunnel_token:
         description: 'Cloudflare Tunnel token'
         required: true
@@ -63,188 +69,16 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Setup NetBird tunnel
-        run: |
-          echo "Installing NetBird..."
-          curl -fsSL https://pkgs.netbird.io/install.sh | sh
-          
-          echo "Ensuring NetBird service is started..."
-          sudo netbird service stop || true
-          sudo netbird service start
-          sleep 3
-          
-          echo "Connecting to NetBird network..."
-          PEER_NAME="gh-${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ inputs.environment }}-${{ github.run_id }}"
-          
-          if ! sudo netbird up --setup-key "${{ secrets.netbird_setup_key }}" --hostname "$PEER_NAME"; then
-            echo "First connection attempt failed, restarting service and retrying..."
-            sudo netbird service stop
-            sleep 2
-            sudo netbird service start
-            sleep 3
-            sudo netbird up --setup-key "${{ secrets.netbird_setup_key }}" --hostname "$PEER_NAME"
-          fi
-          
-          echo "Waiting for NetBird connection..."
-          sleep 5
-          
-          echo "NetBird status:"
-          sudo netbird status
-          
-          echo "Testing connectivity to Portainer..."
-          curl -f -s -o /dev/null -w "%{http_code}" "${{ inputs.portainer_url }}/api/status" || echo "Portainer not yet reachable, continuing..."
-      
-      - name: Setup SSH key for Docker host
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.ssh_private_key }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ inputs.docker_host_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
-      
-      - name: Prepare host directories on Docker host
-        run: |
-          echo "Creating data directories on Docker host..."
-          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "sudo mkdir -p /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config} && sudo chmod 777 /data/${{ inputs.stack_name }} /data/${{ inputs.stack_name }}/* || true"
-          
-          echo "Ensuring external-services network exists..."
-          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "docker network ls | grep -q external-services || docker network create --driver bridge external-services"
-      
-      - name: Copy configuration files to Docker host
-        run: |
-          echo "Copying Caddyfile..."
-          scp docker/Caddyfile ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/Caddyfile
-          
-          echo "Copying nextcloud-config.php..."
-          sed "s|cloud.vansummeren.ch|${{ vars.NEXTCLOUD_DOMAIN }}|g" docker/nextcloud-config.php > /tmp/nextcloud-config.php
-          scp /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/nextcloud-config.php
-          
-          echo "Setting final ownership and permissions..."
-          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "sudo chown -R root:root /data/${{ inputs.stack_name }} && sudo chmod -R 777 /data/${{ inputs.stack_name }} && sudo chmod 777 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php} && sudo chmod 777 /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config}"
-      
-      - name: Check if stack exists
-        id: check_stack
-        run: |
-          STACK_EXISTS=$(curl -s -H "X-API-Key: ${{ secrets.portainer_token }}" \
-            "${{ inputs.portainer_url }}/api/stacks" | \
-            jq -r --arg name "${{ inputs.stack_name }}" '.[] | select(.Name == $name) | .Id' || echo "")
-          
-          if [ -n "$STACK_EXISTS" ]; then
-            echo "stack_id=$STACK_EXISTS" >> $GITHUB_OUTPUT
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Stack exists with ID: $STACK_EXISTS"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Stack does not exist, will create new"
-          fi
-      
-      - name: Update existing stack
-        if: steps.check_stack.outputs.exists == 'true'
-        run: |
-          echo "Updating existing stack ID: ${{ steps.check_stack.outputs.stack_id }}"
-          
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT \
-            -H "X-API-Key: ${{ secrets.portainer_token }}" \
-            -H "Content-Type: application/json" \
-            "${{ inputs.portainer_url }}/api/stacks/${{ steps.check_stack.outputs.stack_id }}/git/redeploy?endpointId=${{ inputs.portainer_endpoint_id }}" \
-            -d '{
-              "repositoryReferenceName": "refs/heads/${{ inputs.git_branch }}",
-              "repositoryAuthentication": true,
-              "repositoryUsername": "vansummeren",
-              "repositoryPassword": "${{ secrets.gh_pat }}",
-              "env": [
-                {"name": "CLOUDFLARE_TUNNEL_TOKEN", "value": "${{ secrets.cloudflare_tunnel_token }}"},
-                {"name": "DB_PASSWORD", "value": "${{ secrets.db_password }}"},
-                {"name": "REDIS_PASSWORD", "value": "${{ secrets.redis_password }}"},
-                {"name": "NEXTCLOUD_DOMAIN", "value": "${{ vars.NEXTCLOUD_DOMAIN }}"},
-                {"name": "DATA_PATH", "value": "/data/${{ inputs.stack_name }}"}
-              ],
-              "prune": false,
-              "pullImage": true
-            }')
-          
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          
-          echo "HTTP Status: $HTTP_CODE"
-          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-            echo "Stack updated successfully"
-          else
-            echo "Update failed (HTTP $HTTP_CODE): $BODY"
-          fi
-      
-      - name: Create new stack
-        if: steps.check_stack.outputs.exists == 'false'
-        run: |
-          echo "Creating new stack: ${{ inputs.stack_name }}"
-          
-          RESPONSE=$(curl -v -w "\n%{http_code}" -X POST \
-            "${{ inputs.portainer_url }}/api/stacks/create/standalone/repository?endpointId=${{ inputs.portainer_endpoint_id }}" \
-            -H "X-API-Key: ${{ secrets.portainer_token }}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"name\": \"${{ inputs.stack_name }}\",
-              \"repositoryURL\": \"https://github.com/${{ github.repository }}\",
-              \"repositoryReferenceName\": \"refs/heads/${{ inputs.git_branch }}\",
-              \"composeFile\": \"${{ inputs.compose_file_path }}\",
-              \"pullImage\": true,
-              \"env\": [
-                {\"name\": \"CLOUDFLARE_TUNNEL_TOKEN\", \"value\": \"${{ secrets.cloudflare_tunnel_token }}\"},
-                {\"name\": \"DB_PASSWORD\", \"value\": \"${{ secrets.db_password }}\"},
-                {\"name\": \"REDIS_PASSWORD\", \"value\": \"${{ secrets.redis_password }}\"},
-                {\"name\": \"NEXTCLOUD_DOMAIN\", \"value\": \"${{ vars.NEXTCLOUD_DOMAIN }}\"},
-                {\"name\": \"DATA_PATH\", \"value\": \"/data/${{ inputs.stack_name }}\"}
-              ],
-              \"repositoryAuthentication\": true,
-              \"repositoryUsername\": \"vansummeren\",
-              \"repositoryPassword\": \"${{ secrets.gh_pat }}\"
-            }" 2>&1)
-          
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          
-          echo "HTTP Status: $HTTP_CODE"
-          echo "Response Body:"
-          echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
-          
-          if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
-            echo "Stack created successfully"
-          else
-            echo "ERROR: Failed to create stack (HTTP $HTTP_CODE)"
-            echo "Full response:"
-            echo "$RESPONSE"
-            exit 1
-          fi
-      
-      - name: Wait for stack deployment
-        run: |
-          echo "Waiting for stack to be ready..."
-          sleep 10
-          
-          # Get stack status
-          STACK_ID="${{ steps.check_stack.outputs.stack_id }}"
-          if [ -z "$STACK_ID" ]; then
-            STACK_ID=$(curl -s -H "X-API-Key: ${{ secrets.portainer_token }}" \
-              "${{ inputs.portainer_url }}/api/stacks" | \
-              jq -r --arg name "${{ inputs.stack_name }}" '.[] | select(.Name == $name) | .Id')
-          fi
-          
-          if [ -n "$STACK_ID" ]; then
-            curl -s -H "X-API-Key: ${{ secrets.portainer_token }}" \
-              "${{ inputs.portainer_url }}/api/stacks/$STACK_ID" | jq '.'
-          fi
-      
-      - name: Cleanup
-        if: always()
-        run: |
-          echo "Disconnecting NetBird..."
-          sudo netbird down || true
-          
-          echo "Cleaning up SSH key..."
-          rm -f ~/.ssh/id_rsa
+    uses: ./.github/workflows/deploy-terraform-stack.yml
+    with:
+      environment: ${{ inputs.environment }}
+      stack_name: ${{ inputs.stack_name }}
+      compose_file_path: ${{ inputs.compose_file_path }}
+      git_branch: ${{ inputs.git_branch }}
+    secrets:
+      portainer_token: ${{ secrets.portainer_token }}
+      gh_pat: ${{ secrets.gh_pat }}
+      cloudflare_tunnel_token: ${{ secrets.cloudflare_tunnel_token }}
+      db_password: ${{ secrets.db_password }}
+      redis_password: ${{ secrets.redis_password }}
+      netbird_setup_key: ${{ secrets.netbird_setup_key }}

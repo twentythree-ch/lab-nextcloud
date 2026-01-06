@@ -1,6 +1,6 @@
 # Nextcloud with Cloudflare Tunnel - Portainer Stack
 
-This repository contains a Docker Compose stack for running Nextcloud with a Cloudflare Tunnel, designed to be deployed via Portainer with automated GitHub Actions CI/CD.
+This repository contains a Docker Compose stack for running Nextcloud with a Cloudflare Tunnel, designed to be deployed via Portainer with automated GitHub Actions CI/CD using Terraform.
 
 ## Architecture
 
@@ -14,7 +14,7 @@ This repository contains a Docker Compose stack for running Nextcloud with a Clo
 
 This stack supports two deployment methods:
 
-1. **Automated CI/CD (Recommended)**: Push to `develop` or `main` branch triggers automatic deployment via GitHub Actions
+1. **Automated CI/CD (Recommended)**: Push to `develop` or `main` branch triggers automatic deployment via GitHub Actions with Terraform
 2. **Manual Portainer**: Deploy directly through Portainer UI
 
 ## Network Configuration
@@ -24,22 +24,48 @@ This stack supports two deployment methods:
 
 ## GitHub Actions CI/CD Setup
 
+The deployment uses **Terraform** with the **Portainer provider** to manage stacks declaratively. This provides:
+- Infrastructure as Code (IaC) for reproducible deployments
+- State management via Azure Blob Storage
+- Automatic drift detection and remediation
+- Git commit-based change detection
+
+### Architecture
+
+```
+GitHub Actions
+    │
+    ├── Azure OIDC Login (for Terraform state backend)
+    │
+    ├── Terraform Init (Azure Blob Storage backend)
+    │
+    ├── NetBird Tunnel (secure connectivity to Portainer)
+    │
+    ├── Terraform Plan (detect changes)
+    │
+    └── Terraform Apply (deploy via Portainer API)
+```
+
 ### Required Secrets and Variables
 
 Configure the following in your GitHub repository:
 
-#### Organization-Level Secrets
-These are shared across all repositories in your organization:
+#### Organization/Repository Secrets
 
 - `NETBIRD_SETUP_KEY` - NetBird tunnel connection key for secure access to Portainer
 - `PORTAINER_TOKEN` - API token for Portainer access
 - `GH_PAT` - GitHub Personal Access Token for Portainer Git integration
-- `SSH_PRIVATE_KEY` - SSH private key for SCP access to Docker host
 
-#### Organization-Level Variables
+#### Organization/Repository Variables
 
-- `PORTAINER_URL` - Portainer URL accessible via NetBird (e.g., `https://portainer-dev.twentythree.ch`)
+- `PORTAINER_URL` - Portainer URL accessible via NetBird (e.g., `https://192.168.11.2:9443`)
 - `PORTAINER_ENDPOINT_ID` - Portainer endpoint ID (typically `2`)
+- `ARM_CLIENT_ID` - Azure AD application client ID for OIDC
+- `ARM_TENANT_ID` - Azure AD tenant ID
+- `ARM_SUBSCRIPTION_ID` - Azure subscription ID
+- `AZURE_TF_STATE_RG` - Resource group for Terraform state storage
+- `AZURE_TF_STATE_ACCOUNT` - Azure Storage account name
+- `AZURE_TF_STATE_CONTAINER` - Blob container name for Terraform state
 
 #### Environment-Level Secrets
 Configure these separately for each environment (`development` and `production`):
@@ -49,6 +75,9 @@ Configure these separately for each environment (`development` and `production`)
 - `CLOUDFLARE_TUNNEL_TOKEN` - Cloudflare Tunnel token (different per environment)
 - `DB_PASSWORD` - PostgreSQL password (different per environment)
 - `REDIS_PASSWORD` - Redis password (different per environment)
+
+#### Environment-Level Variables
+
 - `NEXTCLOUD_DOMAIN` - Nextcloud domain name (different per environment)
 
 #### Environment Protection Rules
@@ -58,6 +87,18 @@ Configure these separately for each environment (`development` and `production`)
 - ✅ Optionally set **Wait timer** for additional safety
 
 **Development environment**: No protection rules needed for automatic deployment
+
+### Azure OIDC Setup
+
+For Terraform state management, configure Azure OIDC federation:
+
+1. Create an Azure AD App Registration
+2. Add federated credentials for GitHub Actions:
+   - Entity type: Environment
+   - Organization: your-org
+   - Repository: your-repo
+   - Environment: development (and production separately)
+3. Grant **Storage Blob Data Contributor** role on the storage account
 
 ### Deployment Workflow
 
@@ -74,24 +115,6 @@ The GitHub Actions workflow automatically deploys based on branch:
 **Data directories on host:**
 - Development: `/data/lab-nextcloud-development/`
 - Production: `/data/lab-nextcloud-production/`
-
-### SSH Key Setup for CI/CD
-
-Generate an SSH key pair for GitHub Actions:
-
-```bash
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_actions_key
-```
-
-1. Copy the **public key** to Docker host:
-   ```bash
-   ssh-copy-id -i ~/.ssh/github_actions_key.pub deploy@192.168.11.2
-   ```
-
-2. Add the **private key** to GitHub:
-   - Go to Organization Settings → Secrets and variables → Actions
-   - New secret: `SSH_PRIVATE_KEY`
-   - Paste the entire private key (including `-----BEGIN/END-----` lines)
 
 ### Docker Host Configuration
 
@@ -112,89 +135,23 @@ docker network ls | grep external-services
 
 #### Directory Permissions
 
-The workflow creates directories automatically, but ensure the SSH user has permissions:
+The Terraform/Portainer deployment expects data directories to exist. Create them:
 
 ```bash
-# Ensure /data exists and is writable
-sudo mkdir -p /data
-sudo chown root:root /data
-sudo chmod 755 /data
-```
+# Development environment
+sudo mkdir -p /data/lab-nextcloud-development/{db,nextcloud,caddy_data,caddy_config}
+sudo chmod -R 755 /data/lab-nextcloud-development
 
-The GitHub Actions workflow will create environment-specific directories:
-- `/data/lab-nextcloud-development/`
-- `/data/lab-nextcloud-production/`
-
-Each with subdirectories: `db/`, `nextcloud/`, `caddy_data/`, `caddy_config/`
-
-**Permissions set by workflow:**
-- Directories: `755` (rwxr-xr-x)
-- Config files: `644` (rw-r--r--)
-
-#### SSH User Requirements
-
-For security, use a dedicated deployment user instead of root:
-
-**Create the deploy user:**
-```bash
-# On the Docker host
-sudo useradd -m -s /bin/bash deploy
-
-# Create /data directory and set ownership
-sudo mkdir -p /data
-sudo chown deploy:deploy /data
-sudo chmod 755 /data
-
-# Add deploy user to docker group (if needed for direct Docker access)
-sudo usermod -aG docker deploy
-```
-
-**Configure sudo access (minimal permissions):**
-```bash
-# Create sudoers file for deploy user
-sudo visudo -f /etc/sudoers.d/deploy
-```
-
-Add the following lines:
-```
-# Allow deploy user to manage /data directory without password
-deploy ALL=(ALL) NOPASSWD: /bin/mkdir -p /data/*, /bin/chmod * /data/*, /bin/chown * /data/*
-```
-
-**Setup SSH key authentication:**
-```bash
-# Switch to deploy user
-sudo su - deploy
-
-# Create .ssh directory
-mkdir -p ~/.ssh
-chmod 700 ~/.ssh
-
-# Add your GitHub Actions public key (generated earlier)
-# This will be done automatically by ssh-copy-id command
-```
-
-**Required permissions for deploy user:**
-- ✅ Write access to `/data/` directory (owner or group member)
-- ✅ Ability to create subdirectories under `/data/`
-- ✅ SSH key authentication enabled
-- ✅ Limited sudo for mkdir, chmod, chown operations on `/data/*`
-
-**Verify setup:**
-```bash
-# Test SSH access
-ssh deploy@192.168.11.2 "mkdir -p /data/test && ls -la /data/"
-
-# Test sudo (should not require password)
-ssh deploy@192.168.11.2 "sudo mkdir -p /data/test-sudo"
+# Production environment
+sudo mkdir -p /data/lab-nextcloud-production/{db,nextcloud,caddy_data,caddy_config}
+sudo chmod -R 755 /data/lab-nextcloud-production
 ```
 
 #### NetBird Access
 
 The Docker host must be:
 - ✅ Connected to the same NetBird network as GitHub Actions
-- ✅ Reachable at IP `192.168.11.2` (or update `docker_host_ip` in workflow)
-- ✅ Accessible via the configured Portainer URL through NetBird tunnel
+- ✅ Reachable via the configured Portainer URL through NetBird tunnel
 
 #### Portainer Configuration
 
@@ -206,7 +163,7 @@ Ensure Portainer:
 
 Test Portainer API access:
 ```bash
-curl -H "X-API-Key: YOUR_TOKEN" https://portainer-url/api/endpoints
+curl -k -H "X-API-Key: YOUR_TOKEN" https://portainer-url:9443/api/endpoints
 ```
 
 ## Prerequisites
@@ -215,41 +172,30 @@ curl -H "X-API-Key: YOUR_TOKEN" https://portainer-url/api/endpoints
 2. Existing `external-services` network (already created on your host)
 3. Cloudflare account with a domain configured
 4. Cloudflare Tunnel created
-5. Create the data directory on your host:
+5. Azure subscription with Storage Account for Terraform state
+6. NetBird network for secure connectivity
+7. Create the data directory on your host:
    ```bash
    mkdir -p /data/lab-nextcloud/{db,nextcloud,caddy_data,caddy_config}
    chmod -R 755 /data/lab-nextcloud
    ```
-6. Copy the `Caddyfile` to your host:
-   ```bash
-   # Download or copy the Caddyfile from your repo to:
-   /data/lab-nextcloud/Caddyfile
-   chmod 644 /data/lab-nextcloud/Caddyfile
-   ```
-7. Copy the `nextcloud-config.php` to your host:
-   ```bash
-   # Download or copy the nextcloud-config.php from your repo
-   # Make sure to replace 'cloud.vansummeren.ch' with YOUR domain
-   /data/lab-nextcloud/nextcloud-config.php
-   chmod 644 /data/lab-nextcloud/nextcloud-config.php
-   ```
 
 ## Setup Instructions
 
-### Automated Deployment (GitHub Actions)
+### Automated Deployment (GitHub Actions with Terraform)
 
-Once secrets are configured (see "GitHub Actions CI/CD Setup" above):
+Once secrets and variables are configured (see "GitHub Actions CI/CD Setup" above):
 
 1. **Initial setup**: Ensure Docker host has `/data` directory and proper permissions
 2. **Commit and push** to `develop` branch → auto-deploys to development
 3. **Merge to `main`** → triggers production deployment (requires approval)
 4. **Monitor**: Check Actions tab for deployment status
 
-The workflow automatically:
-- Connects via NetBird tunnel
-- Creates host directories
-- Copies configuration files
-- Creates or updates Portainer stack
+The Terraform workflow automatically:
+- Connects via NetBird tunnel to Portainer
+- Creates or updates Portainer stack from Git repository
+- Passes environment variables securely
+- Detects changes via git commit SHA and triggers updates
 
 ### Manual Deployment via Portainer
 
@@ -337,19 +283,27 @@ After initial setup, you may want to configure:
 
 ```
 your-repo/
-├── docker-compose.yml       # Main Docker Compose configuration
-├── Caddyfile               # Caddy reverse proxy configuration (copy to /data/lab-nextcloud/)
-├── nextcloud-config.php    # Nextcloud pre-config (copy to /data/lab-nextcloud/)
-├── .env.template           # Template for environment variables
-├── .gitignore              # Git ignore file (include .env)
-└── README.md               # This file
+├── docker/
+│   ├── docker-compose.yml       # Main Docker Compose configuration
+│   ├── Caddyfile                # Caddy reverse proxy configuration
+│   └── nextcloud-config.php     # Nextcloud pre-config
+├── terraform/
+│   ├── main.tf                  # Portainer stack resource definition
+│   ├── variables.tf             # Terraform variables
+│   └── README.md                # Terraform-specific documentation
+├── .github/
+│   └── workflows/
+│       ├── deploy.yml                    # Main deployment orchestrator
+│       ├── deploy-terraform-stack.yml    # Reusable Terraform workflow
+│       └── deploy-portainer-stack.yml    # Wrapper (backwards compat)
+├── .env.template                # Template for environment variables
+├── .gitignore                   # Git ignore file (include .env)
+└── README.md                    # This file
 ```
 
 **Host system:**
 ```
-/data/lab-nextcloud/
-├── Caddyfile               # Copy from repo
-├── nextcloud-config.php    # Copy from repo (update domain!)
+/data/lab-nextcloud-{environment}/
 ├── db/                     # PostgreSQL data
 ├── nextcloud/              # Nextcloud files
 ├── caddy_data/             # Caddy certificates

@@ -1,10 +1,10 @@
 name: Deploy to Portainer
 
 on:
-  # push:
-  #   branches:
-  #     - main
-  #     - develop
+  push:
+    branches:
+      - main
+      - develop
   workflow_dispatch:
     inputs:
       environment:
@@ -19,6 +19,10 @@ on:
         description: 'Git branch to deploy from (leave empty to use default)'
         required: false
         type: string
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   determine-environment:
@@ -58,45 +62,36 @@ jobs:
   deploy-development:
     needs: determine-environment
     if: needs.determine-environment.outputs.deploy_dev == 'true'
-    uses: ./.github/workflows/deploy-portainer-stack.yml
+    uses: ./.github/workflows/deploy-terraform-stack.yml
     with:
       environment: development
       stack_name: lab-nextcloud-development
-      portainer_url: ${{ vars.PORTAINER_URL }}
-      portainer_endpoint_id: ${{ vars.PORTAINER_ENDPOINT_ID }}
-      docker_host_ip: '192.168.11.2'
-      ssh_user: 'deploy'
       git_branch: ${{ github.event.inputs.git_branch || 'develop' }}
       compose_file_path: 'docker/docker-compose.yml'
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
       portainer_token: ${{ secrets.PORTAINER_TOKEN }}
       gh_pat: ${{ secrets.GH_PAT }}
-      ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
       cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
       db_password: ${{ secrets.DB_PASSWORD }}
       redis_password: ${{ secrets.REDIS_PASSWORD }}
+
   deploy-production:
     needs: [determine-environment, deploy-development]
     if: |
       always() &&
       needs.determine-environment.outputs.deploy_prod == 'true' &&
       (needs.deploy-development.result == 'success' || needs.deploy-development.result == 'skipped')
-    uses: ./.github/workflows/deploy-portainer-stack.yml
+    uses: ./.github/workflows/deploy-terraform-stack.yml
     with:
       environment: production
       stack_name: lab-nextcloud-production
-      portainer_url: ${{ vars.PORTAINER_URL }}
-      portainer_endpoint_id: ${{ vars.PORTAINER_ENDPOINT_ID }}
-      docker_host_ip: '192.168.11.2'
-      ssh_user: 'deploy'
       git_branch: ${{ github.event.inputs.git_branch || 'main' }}
       compose_file_path: 'docker/docker-compose.yml'
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
       portainer_token: ${{ secrets.PORTAINER_TOKEN }}
       gh_pat: ${{ secrets.GH_PAT }}
-      ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
       cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
       db_password: ${{ secrets.DB_PASSWORD }}
       redis_password: ${{ secrets.REDIS_PASSWORD }}

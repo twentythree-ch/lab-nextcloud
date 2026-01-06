@@ -13,19 +13,6 @@ services:
     ports:
       - "80:80"
 
-  # Cloudflare Tunnel
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    networks:
-      - internal
-      - external-services
-    environment:
-      - TUNNEL_TRANSPORT_PROTOCOL=http2
-    depends_on:
-      - nginx
-
 volumes:
   html:
     driver: local
