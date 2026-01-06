@@ -70,6 +70,7 @@ jobs:
       cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
       db_password: ${{ secrets.DB_PASSWORD }}
       redis_password: ${{ secrets.REDIS_PASSWORD }}
+      netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
 
   deploy-production:
     needs: [determine-environment, deploy-development]
@@ -89,3 +90,4 @@ jobs:
       cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
       db_password: ${{ secrets.DB_PASSWORD }}
       redis_password: ${{ secrets.REDIS_PASSWORD }}
+      netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}

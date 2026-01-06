@@ -35,6 +35,9 @@ on:
       redis_password:
         description: 'Redis password'
         required: true
+      netbird_setup_key:
+        description: 'NetBird setup key for tunnel connectivity'
+        required: true
 
 jobs:
   deploy:
@@ -44,6 +47,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup NetBird
+        uses: netbirdio/netbird-action@v0.1
+        with:
+          setup-key: ${{ secrets.netbird_setup_key }}
+
+      - name: Wait for NetBird connection
+        run: |
+          echo "Waiting for NetBird to establish connection..."
+          sleep 10
+          netbird status
 
       - name: Login to Azure
         uses: azure/login@v2
