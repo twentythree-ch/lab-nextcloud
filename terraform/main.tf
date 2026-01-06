@@ -5,6 +5,10 @@ terraform {
       source  = "portainer/portainer"
       version = ">= 1.0.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = ">= 3.0"
+    }
   }
 
   backend "azurerm" {
@@ -16,6 +20,13 @@ provider "portainer" {
   endpoint        = var.portainer_url
   api_key         = var.portainer_token
   skip_ssl_verify = true  # Required if using self-signed certs
+}
+
+# Trigger resource to detect git commit changes
+resource "null_resource" "git_change_trigger" {
+  triggers = {
+    git_sha = var.git_sha
+  }
 }
 
 # Deploy stack from Git repository using the Portainer provider
@@ -63,10 +74,8 @@ resource "portainer_stack" "app" {
     value = "/data/${var.stack_name}"
   }
 
-  lifecycle {
-    # Force update when git commit changes (detected via git_sha)
-    replace_triggered_by = [var.git_sha]
-  }
+  # Force update when git commit changes
+  depends_on = [null_resource.git_change_trigger]
 }
 
 output "stack_id" {
