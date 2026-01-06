@@ -48,16 +48,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup NetBird
-        uses: netbirdio/netbird-action@v0.1
-        with:
-          setup-key: ${{ secrets.netbird_setup_key }}
-
-      - name: Wait for NetBird connection
+      - name: Setup NetBird tunnel
         run: |
-          echo "Waiting for NetBird to establish connection..."
-          sleep 10
-          netbird status
+          echo "Installing NetBird..."
+          curl -fsSL https://pkgs.netbird.io/install.sh | sh
+          
+          echo "Starting NetBird service..."
+          sudo netbird service stop || true
+          sudo netbird service start
+          sleep 3
+          
+          echo "Connecting to NetBird network..."
+          sudo netbird up --setup-key "${{ secrets.netbird_setup_key }}"
+          
+          echo "Waiting for connection..."
+          sleep 5
+          
+          echo "NetBird status:"
+          sudo netbird status
 
       - name: Login to Azure
         uses: azure/login@v2
