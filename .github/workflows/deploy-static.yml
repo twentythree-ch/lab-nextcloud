@@ -57,203 +57,35 @@ jobs:
 
   deploy-development:
     needs: determine-environment
-    environment: development
     if: needs.determine-environment.outputs.deploy_dev == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set environment variables
-        run: |
-          echo "ENVIRONMENT=development" >> $GITHUB_ENV
-          echo "STACK_NAME=lab-static-development" >> $GITHUB_ENV
-          echo "COMPOSE_FILE_PATH=docker/docker-compose.static.yml" >> $GITHUB_ENV
-          echo "GIT_BRANCH=develop" >> $GITHUB_ENV
-
-      - name: Verify variables & secrets
-        run: |
-          echo "Repository/Org variables:"
-          echo "AZURE_TF_STATE_ACCOUNT=${{ vars.AZURE_TF_STATE_ACCOUNT }}"
-          echo "AZURE_TF_STATE_RG=${{ vars.AZURE_TF_STATE_RG }}"
-          echo "AZURE_TF_STATE_CONTAINER=${{ vars.AZURE_TF_STATE_CONTAINER }}"
-          echo "ARM_CLIENT_ID=${{ vars.ARM_CLIENT_ID }}"
-          echo "ARM_SUBSCRIPTION_ID=${{ vars.ARM_SUBSCRIPTION_ID }}"
-          echo "ARM_TENANT_ID=${{ vars.ARM_TENANT_ID }}"
-          echo "PORTAINER_URL=${{ vars.PORTAINER_URL }}"
-          echo "PORTAINER_ENDPOINT_ID=${{ vars.PORTAINER_ENDPOINT_ID }}"
-          echo
-          echo "Secrets (lengths only):"
-          printf "ARM_CLIENT_SECRET length: %s\n" "$(echo -n "${{ secrets.ARM_CLIENT_SECRET }}" | wc -c)"
-          printf "PORTAINER_TOKEN length: %s\n" "$(echo -n "${{ secrets.PORTAINER_TOKEN }}" | wc -c)"
-          printf "NETBIRD_SETUP_KEY length: %s\n" "$(echo -n "${{ secrets.NETBIRD_SETUP_KEY }}" | wc -c)"
-          printf "SSH_PRIVATE_KEY length: %s\n" "$(echo -n "${{ secrets.SSH_PRIVATE_KEY }}" | wc -c)"
-
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.ARM_CLIENT_ID }}
-          tenant-id: ${{ vars.ARM_TENANT_ID }}
-          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.5.0
-
-      - name: Terraform Init
-        working-directory: terraform
-        env:
-          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
-          ARM_USE_OIDC: true
-        run: |
-          terraform init -input=false \
-            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG }}" \
-            -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_ACCOUNT }}" \
-            -backend-config="container_name=${{ vars.AZURE_TF_STATE_CONTAINER }}" \
-            -backend-config="key=lab-nextcloud/$ENVIRONMENT.tfstate" \
-            -backend-config="use_oidc=true"
-
-      - name: Terraform Plan
-        working-directory: terraform
-        run: |
-          terraform plan -input=false \
-            -var="environment=development" \
-            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
-            -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" \
-            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
-            -var="stack_name=lab-static-development" \
-            -var="compose_file_path=docker/docker-compose.static.yml" \
-            -var="git_branch=develop" \
-            -var="github_repository=${{ github.repository }}" \
-            -var="github_username=${{ github.repository_owner }}" \
-            -var="github_pat=${{ secrets.GH_PAT }}" \
-            -var="cloudflare_tunnel_token=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" \
-            -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="redis_password=${{ secrets.REDIS_PASSWORD }}" \
-            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
-
-      - name: Terraform Apply
-        if: success()
-        working-directory: terraform
-        run: |
-          terraform apply -input=false -auto-approve \
-            -var="environment=development" \
-            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
-            -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" \
-            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
-            -var="stack_name=lab-static-development" \
-            -var="compose_file_path=docker/docker-compose.static.yml" \
-            -var="git_branch=develop" \
-            -var="github_repository=${{ github.repository }}" \
-            -var="github_username=${{ github.repository_owner }}" \
-            -var="github_pat=${{ secrets.GH_PAT }}" \
-            -var="cloudflare_tunnel_token=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" \
-            -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="redis_password=${{ secrets.REDIS_PASSWORD }}" \
-            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
+    uses: ./.github/workflows/deploy-terraform-stack.yml
+    with:
+      environment: development
+      stack_name: lab-static-development
+      compose_file_path: docker/docker-compose.static.yml
+      git_branch: develop
+    secrets:
+      portainer_token: ${{ secrets.PORTAINER_TOKEN }}
+      gh_pat: ${{ secrets.GH_PAT }}
+      cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+      db_password: ${{ secrets.DB_PASSWORD }}
+      redis_password: ${{ secrets.REDIS_PASSWORD }}
 
   deploy-production:
     needs: [determine-environment, deploy-development]
-    environment: production
     if: |
       always() &&
       needs.determine-environment.outputs.deploy_prod == 'true' &&
       (needs.deploy-development.result == 'success' || needs.deploy-development.result == 'skipped')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set environment variables
-        run: |
-          echo "ENVIRONMENT=production" >> $GITHUB_ENV
-          echo "STACK_NAME=lab-static-production" >> $GITHUB_ENV
-          echo "COMPOSE_FILE_PATH=docker/docker-compose.static.yml" >> $GITHUB_ENV
-          echo "GIT_BRANCH=main" >> $GITHUB_ENV
-
-      - name: Verify variables & secrets
-        run: |
-          echo "Repository/Org variables:"
-          echo "AZURE_TF_STATE_ACCOUNT=${{ vars.AZURE_TF_STATE_ACCOUNT }}"
-          echo "AZURE_TF_STATE_RG=${{ vars.AZURE_TF_STATE_RG }}"
-          echo "AZURE_TF_STATE_CONTAINER=${{ vars.AZURE_TF_STATE_CONTAINER }}"
-          echo "ARM_CLIENT_ID=${{ vars.ARM_CLIENT_ID }}"
-          echo "ARM_SUBSCRIPTION_ID=${{ vars.ARM_SUBSCRIPTION_ID }}"
-          echo "ARM_TENANT_ID=${{ vars.ARM_TENANT_ID }}"
-          echo "PORTAINER_URL=${{ vars.PORTAINER_URL }}"
-          echo "PORTAINER_ENDPOINT_ID=${{ vars.PORTAINER_ENDPOINT_ID }}"
-          echo
-          echo "Secrets (lengths only):"
-          printf "ARM_CLIENT_SECRET length: %s\n" "$(echo -n "${{ secrets.ARM_CLIENT_SECRET }}" | wc -c)"
-          printf "PORTAINER_TOKEN length: %s\n" "$(echo -n "${{ secrets.PORTAINER_TOKEN }}" | wc -c)"
-          printf "NETBIRD_SETUP_KEY length: %s\n" "$(echo -n "${{ secrets.NETBIRD_SETUP_KEY }}" | wc -c)"
-          printf "SSH_PRIVATE_KEY length: %s\n" "$(echo -n "${{ secrets.SSH_PRIVATE_KEY }}" | wc -c)"
-
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.ARM_CLIENT_ID }}
-          tenant-id: ${{ vars.ARM_TENANT_ID }}
-          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.5.0
-
-      - name: Terraform Init
-        working-directory: terraform
-        env:
-          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
-          ARM_USE_OIDC: true
-        run: |
-          terraform init -input=false \
-            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG }}" \
-            -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_ACCOUNT }}" \
-            -backend-config="container_name=${{ vars.AZURE_TF_STATE_CONTAINER }}" \
-            -backend-config="key=lab-nextcloud/$ENVIRONMENT.tfstate" \
-            -backend-config="use_oidc=true"
-
-      - name: Terraform Plan
-        working-directory: terraform
-        run: |
-          terraform plan -input=false \
-            -var="environment=production" \
-            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
-            -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" \
-            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
-            -var="stack_name=lab-static-production" \
-            -var="compose_file_path=docker/docker-compose.static.yml" \
-            -var="git_branch=main" \
-            -var="github_repository=${{ github.repository }}" \
-            -var="github_username=${{ github.repository_owner }}" \
-            -var="github_pat=${{ secrets.GH_PAT }}" \
-            -var="cloudflare_tunnel_token=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" \
-            -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="redis_password=${{ secrets.REDIS_PASSWORD }}" \
-            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
-
-      - name: Terraform Apply
-        if: success()
-        working-directory: terraform
-        run: |
-          terraform apply -input=false -auto-approve \
-            -var="environment=production" \
-            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
-            -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" \
-            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
-            -var="stack_name=lab-static-production" \
-            -var="compose_file_path=docker/docker-compose.static.yml" \
-            -var="git_branch=main" \
-            -var="github_repository=${{ github.repository }}" \
-            -var="github_username=${{ github.repository_owner }}" \
-            -var="github_pat=${{ secrets.GH_PAT }}" \
-            -var="cloudflare_tunnel_token=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" \
-            -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="redis_password=${{ secrets.REDIS_PASSWORD }}" \
-            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
+    uses: ./.github/workflows/deploy-terraform-stack.yml
+    with:
+      environment: production
+      stack_name: lab-static-production
+      compose_file_path: docker/docker-compose.static.yml
+      git_branch: main
+    secrets:
+      portainer_token: ${{ secrets.PORTAINER_TOKEN }}
+      gh_pat: ${{ secrets.GH_PAT }}
+      cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+      db_password: ${{ secrets.DB_PASSWORD }}
+      redis_password: ${{ secrets.REDIS_PASSWORD }}

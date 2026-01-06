@@ -1,0 +1,111 @@
+name: Deploy Stack via Terraform (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Deployment environment (development/production)'
+        required: true
+        type: string
+      stack_name:
+        description: 'Name of the Portainer stack'
+        required: true
+        type: string
+      compose_file_path:
+        description: 'Path to docker-compose file in repo'
+        required: true
+        type: string
+      git_branch:
+        description: 'Git branch to deploy'
+        required: true
+        type: string
+    secrets:
+      portainer_token:
+        description: 'Portainer API token'
+        required: true
+      gh_pat:
+        description: 'GitHub PAT for Portainer Git authentication'
+        required: true
+      cloudflare_tunnel_token:
+        description: 'Cloudflare Tunnel token'
+        required: true
+      db_password:
+        description: 'PostgreSQL password'
+        required: true
+      redis_password:
+        description: 'Redis password'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+
+      - name: Terraform Init
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+          ARM_USE_OIDC: true
+        run: |
+          terraform init -input=false \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.AZURE_TF_STATE_CONTAINER }}" \
+            -backend-config="key=lab-nextcloud/${{ inputs.environment }}.tfstate" \
+            -backend-config="use_oidc=true"
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: |
+          terraform plan -input=false \
+            -var="environment=${{ inputs.environment }}" \
+            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
+            -var="portainer_token=${{ secrets.portainer_token }}" \
+            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
+            -var="stack_name=${{ inputs.stack_name }}" \
+            -var="compose_file_path=${{ inputs.compose_file_path }}" \
+            -var="git_branch=${{ inputs.git_branch }}" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="github_pat=${{ secrets.gh_pat }}" \
+            -var="cloudflare_tunnel_token=${{ secrets.cloudflare_tunnel_token }}" \
+            -var="db_password=${{ secrets.db_password }}" \
+            -var="redis_password=${{ secrets.redis_password }}" \
+            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: |
+          terraform apply -input=false -auto-approve \
+            -var="environment=${{ inputs.environment }}" \
+            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
+            -var="portainer_token=${{ secrets.portainer_token }}" \
+            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
+            -var="stack_name=${{ inputs.stack_name }}" \
+            -var="compose_file_path=${{ inputs.compose_file_path }}" \
+            -var="git_branch=${{ inputs.git_branch }}" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="github_pat=${{ secrets.gh_pat }}" \
+            -var="cloudflare_tunnel_token=${{ secrets.cloudflare_tunnel_token }}" \
+            -var="db_password=${{ secrets.db_password }}" \
+            -var="redis_password=${{ secrets.redis_password }}" \
+            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
