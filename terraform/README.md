@@ -1,33 +1,66 @@
 # Terraform for lab-nextcloud
 
-This folder contains Terraform configuration to deploy the static Portainer stacks and store state in Azure Blob Storage.
+This folder contains Terraform configuration to deploy Portainer stacks using the **official Portainer Terraform provider**.
 
-Required Azure resources (not created by this config):
-- Resource Group (e.g. rg-lab-twentythree-tf)
-- Storage Account (e.g. stlabtwentythree)
-- Blob Container for Terraform state (e.g. terraform-state-nextcloud)
+## Architecture
 
+The deployment uses:
+- **Portainer Terraform Provider** (`portainer/portainer`) to manage stacks via Portainer's API
+- **Azure Blob Storage** for Terraform state backend
+- **GitHub Actions** for CI/CD pipeline
 
-Required GitHub Secrets / Variables (recommended scopes):
-- Organization variables (non-secret):
-	- `AZURE_TF_STATE_ACCOUNT` (storage account name, e.g. stlabtwentythree)
-	- `AZURE_TF_STATE_RG` (resource group name, e.g. rg-lab-twentythree-tf)
-	- `PORTAINER_URL`
-	- `PORTAINER_ENDPOINT_ID`
-	- `ARM_CLIENT_ID`
-	- `ARM_SUBSCRIPTION_ID`
-	- `ARM_TENANT_ID`
+## Required Azure Resources
 
-- Repository variable (non-secret):
-	- `AZURE_TF_STATE_CONTAINER` (blob container name, e.g. terraform-state-nextcloud)
+These must be created before running Terraform (not managed by this config):
+- Resource Group (e.g. `rg-lab-twentythree-tf`)
+- Storage Account (e.g. `stlabtwentythree`)
+- Blob Container for Terraform state (e.g. `terraform-state-nextcloud`)
 
-- Organization secrets (secret values):
-	- `ARM_CLIENT_SECRET` (service principal secret) - used by `azure/login` if not using OIDC
-	- `PORTAINER_TOKEN`
+## Required GitHub Secrets / Variables
 
-Notes about scopes and access:
-- Organization-level variables and secrets must be granted access to this repository (or repository-level variables/secrets added) so the workflow can read them. Using org-level values centralizes configuration for multiple repos.
-- The backend uses Azure AD auth (`use_azuread_auth=true`) so the identity GitHub Actions uses (service principal or OIDC-federated) must have `Storage Blob Data Contributor` role on the storage account or container.
+### Organization variables (non-secret):
+- `AZURE_TF_STATE_ACCOUNT` - Storage account name
+- `AZURE_TF_STATE_RG` - Resource group name
+- `AZURE_TF_STATE_CONTAINER` - Blob container name
+- `PORTAINER_URL` - Portainer base URL (e.g. `https://portainer.example.com`)
+- `PORTAINER_ENDPOINT_ID` - Portainer endpoint ID
+- `NEXTCLOUD_DOMAIN` - Domain for Nextcloud
+- `ARM_CLIENT_ID` - Azure AD application client ID
+- `ARM_SUBSCRIPTION_ID` - Azure subscription ID
+- `ARM_TENANT_ID` - Azure AD tenant ID
+
+### Organization secrets:
+- `PORTAINER_TOKEN` - Portainer API token
+- `GH_PAT` - GitHub Personal Access Token (for Portainer to clone private repos)
+- `CLOUDFLARE_TUNNEL_TOKEN` - Cloudflare Tunnel token
+- `DB_PASSWORD` - PostgreSQL database password
+- `REDIS_PASSWORD` - Redis password
+
+## Terraform Resources
+
+The main resource is `portainer_stack` which:
+- Deploys a Docker Compose stack from a Git repository
+- Passes environment variables to the stack
+- Supports automatic image pulling and force updates
+
+## Local Development
+
+```bash
+# Initialize Terraform (requires Azure login)
+az login
+terraform init \
+  -backend-config="resource_group_name=rg-lab-twentythree-tf" \
+  -backend-config="storage_account_name=stlabtwentythree" \
+  -backend-config="container_name=terraform-state-nextcloud" \
+  -backend-config="key=lab-nextcloud/development.tfstate" \
+  -backend-config="use_azuread_auth=true"
+
+# Plan
+terraform plan -var-file="dev.tfvars"
+
+# Apply
+terraform apply -var-file="dev.tfvars"
+```
 
 Automated setup (no `jq`) — create App Registration, add federated credential, assign role, and set GitHub variables/secrets
 

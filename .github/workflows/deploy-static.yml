@@ -116,18 +116,42 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform
-        env:
-          PORTAINER_TOKEN: ${{ secrets.PORTAINER_TOKEN }}
         run: |
-          terraform plan -input=false -var="environment=development" -var="terraform_state_rg=${{ vars.AZURE_TF_STATE_RG }}" -var="terraform_state_sa=${{ vars.AZURE_TF_STATE_ACCOUNT }}" -var="terraform_state_container=${{ vars.AZURE_TF_STATE_CONTAINER }}" -var="portainer_url=${{ vars.PORTAINER_URL }}" -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" -var="stack_name=lab-static-development" -var="compose_file_path=docker/docker-compose.static.yml" -var="git_branch=develop" -var="git_sha=${{ github.sha }}"
+          terraform plan -input=false \
+            -var="environment=development" \
+            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
+            -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" \
+            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
+            -var="stack_name=lab-static-development" \
+            -var="compose_file_path=docker/docker-compose.static.yml" \
+            -var="git_branch=develop" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="github_pat=${{ secrets.GH_PAT }}" \
+            -var="cloudflare_tunnel_token=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="redis_password=${{ secrets.REDIS_PASSWORD }}" \
+            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
 
       - name: Terraform Apply
         if: success()
         working-directory: terraform
-        env:
-          PORTAINER_TOKEN: ${{ secrets.PORTAINER_TOKEN }}
         run: |
-          terraform apply -input=false -auto-approve -var="environment=development" -var="terraform_state_rg=${{ vars.AZURE_TF_STATE_RG }}" -var="terraform_state_sa=${{ vars.AZURE_TF_STATE_ACCOUNT }}" -var="terraform_state_container=${{ vars.AZURE_TF_STATE_CONTAINER }}" -var="portainer_url=${{ vars.PORTAINER_URL }}" -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" -var="stack_name=lab-static-development" -var="compose_file_path=docker/docker-compose.static.yml" -var="git_branch=develop" -var="git_sha=${{ github.sha }}"
+          terraform apply -input=false -auto-approve \
+            -var="environment=development" \
+            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
+            -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" \
+            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
+            -var="stack_name=lab-static-development" \
+            -var="compose_file_path=docker/docker-compose.static.yml" \
+            -var="git_branch=develop" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="github_pat=${{ secrets.GH_PAT }}" \
+            -var="cloudflare_tunnel_token=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="redis_password=${{ secrets.REDIS_PASSWORD }}" \
+            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
 
   deploy-production:
     needs: [determine-environment, deploy-development]
@@ -193,15 +217,39 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform
-        env:
-          PORTAINER_TOKEN: ${{ secrets.PORTAINER_TOKEN }}
         run: |
-          terraform plan -input=false -var="environment=production" -var="terraform_state_rg=${{ vars.AZURE_TF_STATE_RG }}" -var="terraform_state_sa=${{ vars.AZURE_TF_STATE_ACCOUNT }}" -var="terraform_state_container=${{ vars.AZURE_TF_STATE_CONTAINER }}" -var="portainer_url=${{ vars.PORTAINER_URL }}" -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" -var="stack_name=lab-static-production" -var="compose_file_path=docker/docker-compose.static.yml" -var="git_branch=main" -var="git_sha=${{ github.sha }}"
+          terraform plan -input=false \
+            -var="environment=production" \
+            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
+            -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" \
+            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
+            -var="stack_name=lab-static-production" \
+            -var="compose_file_path=docker/docker-compose.static.yml" \
+            -var="git_branch=main" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="github_pat=${{ secrets.GH_PAT }}" \
+            -var="cloudflare_tunnel_token=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="redis_password=${{ secrets.REDIS_PASSWORD }}" \
+            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
 
       - name: Terraform Apply
         if: success()
         working-directory: terraform
-        env:
-          PORTAINER_TOKEN: ${{ secrets.PORTAINER_TOKEN }}
         run: |
-          terraform apply -input=false -auto-approve -var="environment=production" -var="terraform_state_rg=${{ vars.AZURE_TF_STATE_RG }}" -var="terraform_state_sa=${{ vars.AZURE_TF_STATE_ACCOUNT }}" -var="terraform_state_container=${{ vars.AZURE_TF_STATE_CONTAINER }}" -var="portainer_url=${{ vars.PORTAINER_URL }}" -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" -var="stack_name=lab-static-production" -var="compose_file_path=docker/docker-compose.static.yml" -var="git_branch=main" -var="git_sha=${{ github.sha }}"
+          terraform apply -input=false -auto-approve \
+            -var="environment=production" \
+            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
+            -var="portainer_token=${{ secrets.PORTAINER_TOKEN }}" \
+            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
+            -var="stack_name=lab-static-production" \
+            -var="compose_file_path=docker/docker-compose.static.yml" \
+            -var="git_branch=main" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="github_pat=${{ secrets.GH_PAT }}" \
+            -var="cloudflare_tunnel_token=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="redis_password=${{ secrets.REDIS_PASSWORD }}" \
+            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"

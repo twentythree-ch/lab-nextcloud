@@ -3,21 +3,6 @@ variable "environment" {
   type        = string
 }
 
-variable "terraform_state_rg" {
-  description = "Resource Group containing the storage account for terraform state"
-  type        = string
-}
-
-variable "terraform_state_sa" {
-  description = "Storage account name for terraform state"
-  type        = string
-}
-
-variable "terraform_state_container" {
-  description = "Blob container name for terraform state"
-  type        = string
-}
-
 variable "portainer_url" {
   description = "Portainer base URL (e.g. https://portainer.example.com)"
   type        = string
@@ -45,12 +30,46 @@ variable "compose_file_path" {
 }
 
 variable "git_branch" {
-  description = "Git branch to deploy (used for reference)"
+  description = "Git branch to deploy"
   type        = string
   default     = "main"
 }
 
-variable "git_sha" {
-  description = "Git commit sha to use as a trigger"
+variable "github_repository" {
+  description = "GitHub repository in format owner/repo"
+  type        = string
+}
+
+variable "github_username" {
+  description = "GitHub username for repository authentication"
+  type        = string
+}
+
+variable "github_pat" {
+  description = "GitHub Personal Access Token for repository authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "cloudflare_tunnel_token" {
+  description = "Cloudflare Tunnel token"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_password" {
+  description = "PostgreSQL database password"
+  type        = string
+  sensitive   = true
+}
+
+variable "redis_password" {
+  description = "Redis password"
+  type        = string
+  sensitive   = true
+}
+
+variable "nextcloud_domain" {
+  description = "Nextcloud domain name"
   type        = string
 }

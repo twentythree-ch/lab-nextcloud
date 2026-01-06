@@ -1,32 +1,70 @@
 
 terraform {
   required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = ">= 3.0.0"
+    portainer = {
+      source  = "portainer/portainer"
+      version = ">= 1.0.0"
     }
+  }
+
+  backend "azurerm" {
+    # Configuration provided via -backend-config during init
   }
 }
 
-provider "azurerm" {
-  features = {}
+provider "portainer" {
+  endpoint        = var.portainer_url
+  api_key         = var.portainer_token
+  skip_ssl_verify = true  # Required if using self-signed certs
 }
 
-# Placeholder resource that triggers a deployment provisioner.
-# The provisioner runs a script which should perform the Portainer stack create/update.
-resource "null_resource" "deploy_stack" {
-  triggers = {
-    git_sha         = var.git_sha
-    compose_path    = var.compose_file_path
-    stack_name      = var.stack_name
-    portainer_url   = var.portainer_url
-    portainer_ep_id = var.portainer_endpoint_id
+# Deploy stack from Git repository using the Portainer provider
+resource "portainer_stack" "app" {
+  name            = var.stack_name
+  deployment_type = "standalone"
+  method          = "repository"
+  endpoint_id     = tonumber(var.portainer_endpoint_id)
+
+  # Git repository configuration
+  repository_url                = "https://github.com/${var.github_repository}"
+  repository_reference_name     = "refs/heads/${var.git_branch}"
+  file_path_in_repository       = var.compose_file_path
+  git_repository_authentication = true
+  repository_username           = var.github_username
+  repository_password           = var.github_pat
+
+  # Stack behavior
+  pull_image   = true
+  force_update = true
+
+  # Environment variables for the stack
+  env {
+    name  = "CLOUDFLARE_TUNNEL_TOKEN"
+    value = var.cloudflare_tunnel_token
   }
 
-  provisioner "local-exec" {
-    command = "bash ${path.module}/scripts/deploy_stack.sh '${var.stack_name}' '${var.compose_file_path}' '${var.portainer_endpoint_id}' '${var.portainer_url}'"
-    environment = {
-      PORTAINER_TOKEN = var.portainer_token
-    }
+  env {
+    name  = "DB_PASSWORD"
+    value = var.db_password
   }
+
+  env {
+    name  = "REDIS_PASSWORD"
+    value = var.redis_password
+  }
+
+  env {
+    name  = "NEXTCLOUD_DOMAIN"
+    value = var.nextcloud_domain
+  }
+
+  env {
+    name  = "DATA_PATH"
+    value = "/data/${var.stack_name}"
+  }
+}
+
+output "stack_id" {
+  description = "ID of the deployed Portainer stack"
+  value       = portainer_stack.app.id
 }
