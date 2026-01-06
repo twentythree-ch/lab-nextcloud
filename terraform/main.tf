@@ -62,6 +62,11 @@ resource "portainer_stack" "app" {
     name  = "DATA_PATH"
     value = "/data/${var.stack_name}"
   }
+
+  lifecycle {
+    # Force update when git commit changes (detected via git_sha)
+    replace_triggered_by = [var.git_sha]
+  }
 }
 
 output "stack_id" {

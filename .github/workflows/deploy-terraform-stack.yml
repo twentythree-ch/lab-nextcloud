@@ -111,6 +111,7 @@ jobs:
             -var="stack_name=${{ inputs.stack_name }}" \
             -var="compose_file_path=${{ inputs.compose_file_path }}" \
             -var="git_branch=${{ inputs.git_branch }}" \
+            -var="git_sha=${{ github.sha }}" \
             -var="github_repository=${{ github.repository }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="github_pat=${{ secrets.gh_pat }}" \
@@ -135,6 +136,7 @@ jobs:
             -var="stack_name=${{ inputs.stack_name }}" \
             -var="compose_file_path=${{ inputs.compose_file_path }}" \
             -var="git_branch=${{ inputs.git_branch }}" \
+            -var="git_sha=${{ github.sha }}" \
             -var="github_repository=${{ github.repository }}" \
             -var="github_username=${{ github.repository_owner }}" \
             -var="github_pat=${{ secrets.gh_pat }}" \

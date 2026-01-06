@@ -73,3 +73,9 @@ variable "nextcloud_domain" {
   description = "Nextcloud domain name"
   type        = string
 }
+
+variable "git_sha" {
+  description = "Git commit SHA to trigger updates when code changes"
+  type        = string
+  default     = ""
+}
