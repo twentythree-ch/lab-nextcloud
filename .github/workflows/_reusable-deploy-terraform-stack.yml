@@ -58,7 +58,7 @@ jobs:
       - name: Prepare environment-specific .env file
         run: |
           echo "Using .env.${{ inputs.environment }} for stack deployment"
-          cp docker/.env.${{ inputs.environment }} docker/.env
+          cp .env.${{ inputs.environment }} docker/.env
           cat docker/.env
 
       - name: Login to Azure
