@@ -55,6 +55,9 @@ on:
       ssh_private_key:
         description: 'SSH private key for host authentication'
         required: true
+      entra_client_secret:
+        description: 'Entra ID OAuth client secret'
+        required: false
 
 jobs:
   deploy:
@@ -191,3 +194,30 @@ jobs:
             -var="db_password=${{ secrets.db_password }}" \
             -var="redis_password=${{ secrets.redis_password }}" \
             -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
+
+      - name: Configure Nextcloud apps and OAuth
+        if: ${{ vars.ENTRA_CLIENT_ID != '' }}
+        run: |
+          echo "Waiting for Nextcloud to be ready..."
+          sleep 30
+          
+          CONTAINER="${{ inputs.stack_name }}-nextcloud-1"
+          
+          echo "Installing Nextcloud apps..."
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "
+            docker exec -u www-data $CONTAINER php occ app:install user_oidc || true
+            docker exec -u www-data $CONTAINER php occ app:install calendar || true
+            docker exec -u www-data $CONTAINER php occ app:install contacts || true
+            docker exec -u www-data $CONTAINER php occ app:install tasks || true
+          "
+          
+          echo "Configuring Entra ID OAuth..."
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "
+            docker exec -u www-data $CONTAINER php occ user_oidc:provider:delete 'Entra ID' 2>/dev/null || true
+            docker exec -u www-data $CONTAINER php occ user_oidc:provider:create 'Entra ID' \
+              --clientid='${{ vars.ENTRA_CLIENT_ID }}' \
+              --clientsecret='${{ secrets.entra_client_secret }}' \
+              --discoveryuri='https://login.microsoftonline.com/${{ vars.ENTRA_TENANT_ID }}/v2.0/.well-known/openid-configuration'
+          "
+          
+          echo "Nextcloud configuration complete!"

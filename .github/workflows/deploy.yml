@@ -79,6 +79,7 @@ jobs:
       db_password: ${{ secrets.DB_PASSWORD }}
       redis_password: ${{ secrets.REDIS_PASSWORD }}
       ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+      entra_client_secret: ${{ secrets.ENTRA_CLIENT_SECRET }}
 
   deploy-production:
     needs: [determine-environment, deploy-development]
@@ -103,3 +104,4 @@ jobs:
       db_password: ${{ secrets.DB_PASSWORD }}
       redis_password: ${{ secrets.REDIS_PASSWORD }}
       ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+      entra_client_secret: ${{ secrets.ENTRA_CLIENT_SECRET }}
