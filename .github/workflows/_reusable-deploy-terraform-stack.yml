@@ -120,29 +120,24 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.ssh_private_key }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          cat >> ~/.ssh/config << EOF
-          Host ${{ inputs.docker_host_ip }}
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
 
       - name: Prepare host directories on Docker host
         run: |
           echo "Creating data directories on Docker host..."
-          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "mkdir -p /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config} && chmod -R 755 /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config}"
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "mkdir -p /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config} && chmod -R 755 /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config}"
 
       - name: Copy configuration files to Docker host
         run: |
           echo "Copying Caddyfile..."
-          scp docker/Caddyfile ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/Caddyfile
+          scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null docker/Caddyfile ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/Caddyfile
           
           echo "Copying nextcloud-config.php..."
           # Update domain in config before copying
           sed "s|cloud.vansummeren.ch|${{ vars.NEXTCLOUD_DOMAIN }}|g" docker/nextcloud-config.php > /tmp/nextcloud-config.php
-          scp /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/nextcloud-config.php
+          scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/nextcloud-config.php
           
           echo "Setting permissions..."
-          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "chmod 644 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php}"
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "chmod 644 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php}"
 
       - name: Terraform Plan
         working-directory: terraform
