@@ -23,6 +23,11 @@ on:
         description: 'Terraform state file key (e.g., lab-nextcloud/development.tfstate)'
         required: true
         type: string
+      docker_host_ip:
+        description: 'IP address of Docker host for SSH operations'
+        required: false
+        type: string
+        default: ${{ vars.DOCKER_HOST_IP }}
     secrets:
       portainer_token:
         description: 'Portainer API token'
@@ -41,6 +46,9 @@ on:
         required: true
       netbird_setup_key:
         description: 'NetBird setup key for tunnel connectivity'
+        required: true
+      ssh_private_key:
+        description: 'SSH private key for host authentication'
         required: true
 
 jobs:
@@ -101,6 +109,32 @@ jobs:
           
           echo "NetBird status:"
           sudo netbird status
+
+      - name: Create host directories and set permissions
+        run: |
+          # Setup SSH key
+          mkdir -p /tmp
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
+          chmod 600 /tmp/ssh_key
+          
+          echo "Creating directories on Docker host via SSH..."
+          DATA_PATH="/data/${{ inputs.stack_name }}"
+          
+          ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key "root@${{ inputs.docker_host_ip }}" << EOF
+          mkdir -p \$DATA_PATH/db
+          mkdir -p \$DATA_PATH/nextcloud
+          mkdir -p \$DATA_PATH/caddy_data
+          mkdir -p \$DATA_PATH/caddy_config
+          
+          chmod -R 755 \$DATA_PATH
+          echo "Created and set permissions for \$DATA_PATH"
+          EOF
+          
+          # Copy Caddyfile to host
+          echo "Copying Caddyfile to host..."
+          scp -o StrictHostKeyChecking=no -i /tmp/ssh_key docker/Caddyfile "root@${{ inputs.docker_host_ip }}:$DATA_PATH/Caddyfile"
+          
+          rm /tmp/ssh_key
 
       - name: Terraform Plan
         working-directory: terraform

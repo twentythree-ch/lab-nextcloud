@@ -69,6 +69,7 @@ jobs:
       git_branch: ${{ github.event.inputs.git_branch || 'develop' }}
       compose_file_path: 'docker/docker-compose.yml'
       tf_state_key: 'lab-nextcloud/development.tfstate'
+      docker_host_ip: ${{ vars.DOCKER_HOST_IP }}
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
       portainer_token: ${{ secrets.PORTAINER_TOKEN }}
@@ -76,6 +77,7 @@ jobs:
       cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
       db_password: ${{ secrets.DB_PASSWORD }}
       redis_password: ${{ secrets.REDIS_PASSWORD }}
+      ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
 
   deploy-production:
     needs: [determine-environment, deploy-development]
@@ -90,6 +92,7 @@ jobs:
       git_branch: ${{ github.event.inputs.git_branch || 'main' }}
       compose_file_path: 'docker/docker-compose.yml'
       tf_state_key: 'lab-nextcloud/production.tfstate'
+      docker_host_ip: ${{ vars.DOCKER_HOST_IP }}
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
       portainer_token: ${{ secrets.PORTAINER_TOKEN }}
@@ -97,3 +100,4 @@ jobs:
       cloudflare_tunnel_token: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
       db_password: ${{ secrets.DB_PASSWORD }}
       redis_password: ${{ secrets.REDIS_PASSWORD }}
+      ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
