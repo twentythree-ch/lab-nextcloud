@@ -57,9 +57,16 @@ jobs:
 
       - name: Prepare environment-specific .env file
         run: |
-          echo "Using .env.${{ inputs.environment }} for stack deployment"
-          cp .env.${{ inputs.environment }} docker/.env
-          cat docker/.env
+          echo "Substituting DATA_PATH for environment: ${{ inputs.environment }}"
+          DATA_PATH="/data/${{ inputs.stack_name }}"
+          echo "Using DATA_PATH: $DATA_PATH"
+          
+          # Create a temporary docker-compose with substituted values
+          sed "s|\${DATA_PATH}|$DATA_PATH|g" docker/docker-compose.yml > docker/docker-compose.yml.tmp
+          mv docker/docker-compose.yml.tmp docker/docker-compose.yml
+          
+          # Verify substitution
+          grep "device:" docker/docker-compose.yml | head -3
 
       - name: Login to Azure
         uses: azure/login@v2
