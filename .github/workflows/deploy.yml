@@ -70,6 +70,7 @@ jobs:
       compose_file_path: 'docker/docker-compose.yml'
       tf_state_key: 'lab-nextcloud/development.tfstate'
       docker_host_ip: ${{ vars.DOCKER_HOST_IP }}
+      ssh_user: 'deploy'
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
       portainer_token: ${{ secrets.PORTAINER_TOKEN }}
@@ -93,6 +94,7 @@ jobs:
       compose_file_path: 'docker/docker-compose.yml'
       tf_state_key: 'lab-nextcloud/production.tfstate'
       docker_host_ip: ${{ vars.DOCKER_HOST_IP }}
+      ssh_user: 'deploy'
     secrets:
       netbird_setup_key: ${{ secrets.NETBIRD_SETUP_KEY }}
       portainer_token: ${{ secrets.PORTAINER_TOKEN }}

@@ -32,7 +32,7 @@ on:
         description: 'SSH user for Docker host'
         required: false
         type: string
-        default: 'root'
+        default: 'deploy'
     secrets:
       portainer_token:
         description: 'Portainer API token'
