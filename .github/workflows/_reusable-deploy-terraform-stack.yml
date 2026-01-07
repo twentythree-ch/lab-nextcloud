@@ -125,7 +125,7 @@ jobs:
       - name: Prepare host directories on Docker host
         run: |
           echo "Creating data directories on Docker host..."
-          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "mkdir -p /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config} && chmod -R 755 /data/${{ inputs.stack_name }}"
+          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "mkdir -p /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config} && chmod -R 755 /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config}"
 
       - name: Copy configuration files to Docker host
         run: |
