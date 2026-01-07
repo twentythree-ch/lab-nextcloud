@@ -51,7 +51,7 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     volumes:
-      - ${DATA_PATH}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /data/lab-nextcloud-development/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
       - nextcloud_data:/var/www/html:ro
@@ -82,25 +82,25 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${DATA_PATH}/db
+      device: /data/lab-nextcloud-development/db
   nextcloud_data:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${DATA_PATH}/nextcloud
+      device: /data/lab-nextcloud-development/nextcloud
   caddy_data:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${DATA_PATH}/caddy_data
+      device: /data/lab-nextcloud-development/caddy_data
   caddy_config:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${DATA_PATH}/caddy_config
+      device: /data/lab-nextcloud-development/caddy_config
 
 networks:
   internal:

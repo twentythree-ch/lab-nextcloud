@@ -55,18 +55,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare environment-specific .env file
-        run: |
-          echo "Substituting DATA_PATH for environment: ${{ inputs.environment }}"
-          DATA_PATH="/data/${{ inputs.stack_name }}"
-          echo "Using DATA_PATH: $DATA_PATH"
-          
-          # Create a temporary docker-compose with substituted values
-          sed "s|\${DATA_PATH}|$DATA_PATH|g" docker/docker-compose.yml > docker/docker-compose.yml.tmp
-          mv docker/docker-compose.yml.tmp docker/docker-compose.yml
-          
-          # Verify substitution
-          grep "device:" docker/docker-compose.yml | head -3
+      - name: Checkout
+        run: echo "Docker-compose is hardcoded for testing - verify paths in docker-compose.yml"
 
       - name: Login to Azure
         uses: azure/login@v2
