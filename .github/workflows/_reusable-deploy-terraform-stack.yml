@@ -120,7 +120,11 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.ssh_private_key }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ inputs.docker_host_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          cat >> ~/.ssh/config << EOF
+          Host ${{ inputs.docker_host_ip }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
 
       - name: Prepare host directories on Docker host
         run: |
