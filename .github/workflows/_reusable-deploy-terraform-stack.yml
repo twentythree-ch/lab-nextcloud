@@ -120,6 +120,9 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.ssh_private_key }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          
+          # Remove NetBird's broken SSH config if it exists
+          sudo rm -f /etc/ssh/ssh_config.d/99-netbird.conf || true
 
       - name: Prepare host directories on Docker host
         run: |
