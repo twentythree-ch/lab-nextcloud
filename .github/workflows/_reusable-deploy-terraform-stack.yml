@@ -28,6 +28,11 @@ on:
         required: false
         type: string
         default: ${{ vars.DOCKER_HOST_IP }}
+      ssh_user:
+        description: 'SSH user for Docker host'
+        required: false
+        type: string
+        default: 'root'
     secrets:
       portainer_token:
         description: 'Portainer API token'
@@ -110,31 +115,30 @@ jobs:
           echo "NetBird status:"
           sudo netbird status
 
-      - name: Create host directories and set permissions
+      - name: Setup SSH key for Docker host
         run: |
-          # Setup SSH key
-          mkdir -p /tmp
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
-          chmod 600 /tmp/ssh_key
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ssh_private_key }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ inputs.docker_host_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Prepare host directories on Docker host
+        run: |
+          echo "Creating data directories on Docker host..."
+          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "mkdir -p /data/${{ inputs.stack_name }}/{db,nextcloud,caddy_data,caddy_config} && chmod -R 755 /data/${{ inputs.stack_name }}"
+
+      - name: Copy configuration files to Docker host
+        run: |
+          echo "Copying Caddyfile..."
+          scp docker/Caddyfile ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/Caddyfile
           
-          echo "Creating directories on Docker host via SSH..."
-          DATA_PATH="/data/${{ inputs.stack_name }}"
+          echo "Copying nextcloud-config.php..."
+          # Update domain in config before copying
+          sed "s|cloud.vansummeren.ch|${{ vars.NEXTCLOUD_DOMAIN }}|g" docker/nextcloud-config.php > /tmp/nextcloud-config.php
+          scp /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/nextcloud-config.php
           
-          ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key "root@${{ inputs.docker_host_ip }}" << EOF
-          mkdir -p \$DATA_PATH/db
-          mkdir -p \$DATA_PATH/nextcloud
-          mkdir -p \$DATA_PATH/caddy_data
-          mkdir -p \$DATA_PATH/caddy_config
-          
-          chmod -R 755 \$DATA_PATH
-          echo "Created and set permissions for \$DATA_PATH"
-          EOF
-          
-          # Copy Caddyfile to host
-          echo "Copying Caddyfile to host..."
-          scp -o StrictHostKeyChecking=no -i /tmp/ssh_key docker/Caddyfile "root@${{ inputs.docker_host_ip }}:$DATA_PATH/Caddyfile"
-          
-          rm /tmp/ssh_key
+          echo "Setting permissions..."
+          ssh ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "chmod 644 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php}"
 
       - name: Terraform Plan
         working-directory: terraform
