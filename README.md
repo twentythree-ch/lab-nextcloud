@@ -75,10 +75,13 @@ Configure these separately for each environment (`development` and `production`)
 - `CLOUDFLARE_TUNNEL_TOKEN` - Cloudflare Tunnel token (different per environment)
 - `DB_PASSWORD` - PostgreSQL password (different per environment)
 - `REDIS_PASSWORD` - Redis password (different per environment)
+- `AUTHENTIK_CLIENT_ID` - Authentik OIDC application client ID (different per environment)
+- `AUTHENTIK_CLIENT_SECRET` - Authentik OIDC application client secret (different per environment)
 
 #### Environment-Level Variables
 
 - `NEXTCLOUD_DOMAIN` - Nextcloud domain name (different per environment)
+- `AUTHENTIK_DISCOVERY_URL` - Authentik OIDC discovery URL (e.g., `https://auth.vansummeren.ch/application/o/nextcloud/.well-known/openid-configuration`)
 
 #### Environment Protection Rules
 
@@ -420,25 +423,83 @@ You can restrict access to your Nextcloud (and other services) to specific count
 
 **Important**: Test the rule from an allowed country first to avoid locking yourself out!
 
-### SAML Authentication with Microsoft Entra ID
+### OIDC Authentication with Authentik
 
-The stack supports SAML SSO with Microsoft Entra ID (Azure AD). To configure:
+The stack supports Single Sign-On (SSO) via OpenID Connect with Authentik. This is the recommended authentication method for centralized identity management.
 
-1. **Install SAML app in Nextcloud**:
-   - Log in as admin → Apps → Search for "SSO & SAML authentication"
-   - Download and enable
+#### 1. Create Application in Authentik
 
-2. **Configure in Azure/Entra ID**:
-   - Create Enterprise Application (Non-gallery)
-   - Set up SAML with:
-     - Entity ID: `https://your-domain.com/apps/user_saml/saml/metadata`
-     - Reply URL: `https://your-domain.com/apps/user_saml/saml/acs`
-     - Sign-on URL: `https://your-domain.com`
+1. Go to **Authentik Admin** → **Applications** → **Create**
+2. Configure the application:
+   - **Name**: `Nextcloud`
+   - **Slug**: `nextcloud`
+   - **Provider**: Create a new OAuth2/OpenID Provider (see step 2)
+3. After creation, the discovery URL will be:
+   - `https://YOUR_AUTHENTIK_DOMAIN/application/o/nextcloud/.well-known/openid-configuration`
 
-3. **Configure in Nextcloud**:
-   - Settings → SSO & SAML authentication
-   - Add identity provider with Azure metadata
-   - Map attributes (email, displayname, uid)
+#### 2. Create OAuth2/OpenID Provider
+
+1. Go to **Providers** → **Create** → **OAuth2/OpenID Provider**
+2. Configure:
+   - **Name**: `Nextcloud`
+   - **Authorization flow**: Select your authorization flow
+   - **Client type**: Confidential
+   - **Client ID**: Auto-generated → use as `AUTHENTIK_CLIENT_ID`
+   - **Client Secret**: Auto-generated → use as `AUTHENTIK_CLIENT_SECRET`
+   - **Redirect URIs**: `https://YOUR_NEXTCLOUD_DOMAIN/apps/user_oidc/code`
+3. Under **Advanced protocol settings**:
+   - **Scopes**: `openid`, `profile`, `email`
+   - **Subject mode**: Based on user's username (or email)
+
+#### 3. Install and Configure the OIDC App
+
+After stack deployment, install the `user_oidc` app:
+
+```bash
+# Enable the app
+docker exec -u www-data <nextcloud-container> php occ app:enable user_oidc
+
+# Add the Authentik provider
+docker exec -u www-data <nextcloud-container> php occ user_oidc:provider:create "Authentik" \
+  --clientid="YOUR_CLIENT_ID" \
+  --clientsecret="YOUR_CLIENT_SECRET" \
+  --discoveryuri="https://auth.vansummeren.ch/application/o/nextcloud/.well-known/openid-configuration" \
+  --mapping-uid="preferred_username" \
+  --mapping-email="email" \
+  --mapping-displayname="name" \
+  --unique-uid=1 \
+  --check-bearer=0
+```
+
+#### 4. Configuration Options
+
+| Setting | Recommended Value | Notes |
+|---------|------------------|-------|
+| `mapping-uid` | `preferred_username` | Maps to Authentik username |
+| `mapping-email` | `email` | Maps to user email |
+| `mapping-displayname` | `name` | Maps to user display name |
+| `unique-uid` | `1` | Prevents username collisions |
+| `check-bearer` | `0` | Set to `1` if using API access with tokens |
+
+#### 5. Optional: Disable Password Login
+
+To enforce OIDC-only authentication:
+
+```bash
+docker exec -u www-data <nextcloud-container> php occ config:app:set user_oidc allow_multiple_user_backends --value=0
+```
+
+**Warning**: Ensure OIDC is working before disabling password login!
+
+#### Environment Variables Reference
+
+The following environment variables are passed to the stack for OIDC configuration:
+
+| Variable | Description | Source |
+|----------|-------------|--------|
+| `AUTHENTIK_CLIENT_ID` | Authentik OIDC Application Client ID | GitHub Environment Secret |
+| `AUTHENTIK_CLIENT_SECRET` | Authentik OIDC Application Client Secret | GitHub Environment Secret |
+| `AUTHENTIK_DISCOVERY_URL` | Authentik OIDC Discovery URL | GitHub Environment Variable |
 
 ### Group Folders
 

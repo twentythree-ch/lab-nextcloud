@@ -74,6 +74,21 @@ resource "portainer_stack" "app" {
     value = "/data/${var.stack_name}"
   }
 
+  env {
+    name  = "AUTHENTIK_CLIENT_ID"
+    value = var.authentik_client_id
+  }
+
+  env {
+    name  = "AUTHENTIK_CLIENT_SECRET"
+    value = var.authentik_client_secret
+  }
+
+  env {
+    name  = "AUTHENTIK_DISCOVERY_URL"
+    value = var.authentik_discovery_url
+  }
+
   # Force update when git commit changes
   depends_on = [null_resource.git_change_trigger]
 }

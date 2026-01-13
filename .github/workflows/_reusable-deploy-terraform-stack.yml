@@ -55,8 +55,8 @@ on:
       ssh_private_key:
         description: 'SSH private key for host authentication'
         required: true
-      entra_client_secret:
-        description: 'Entra ID OAuth client secret'
+      authentik_client_secret:
+        description: 'Authentik OIDC client secret'
         required: false
 
 jobs:
@@ -179,7 +179,10 @@ jobs:
             -var="cloudflare_tunnel_token=${{ secrets.cloudflare_tunnel_token }}" \
             -var="db_password=${{ secrets.db_password }}" \
             -var="redis_password=${{ secrets.redis_password }}" \
-            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
+            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}" \
+            -var="authentik_client_id=${{ vars.AUTHENTIK_CLIENT_ID }}" \
+            -var="authentik_client_secret=${{ secrets.authentik_client_secret }}" \
+            -var="authentik_discovery_url=${{ vars.AUTHENTIK_DISCOVERY_URL }}"
 
       - name: Terraform Apply
         working-directory: terraform
@@ -204,10 +207,13 @@ jobs:
             -var="cloudflare_tunnel_token=${{ secrets.cloudflare_tunnel_token }}" \
             -var="db_password=${{ secrets.db_password }}" \
             -var="redis_password=${{ secrets.redis_password }}" \
-            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}"
+            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}" \
+            -var="authentik_client_id=${{ vars.AUTHENTIK_CLIENT_ID }}" \
+            -var="authentik_client_secret=${{ secrets.authentik_client_secret }}" \
+            -var="authentik_discovery_url=${{ vars.AUTHENTIK_DISCOVERY_URL }}"
 
       - name: Configure Nextcloud apps and OAuth
-        if: ${{ vars.ENTRA_CLIENT_ID != '' }}
+        if: ${{ vars.AUTHENTIK_CLIENT_ID != '' }}
         run: |
           echo "Waiting for Nextcloud to be ready..."
           sleep 30
@@ -222,12 +228,16 @@ jobs:
             docker exec -u www-data $CONTAINER php occ app:install tasks || true
           "
           
-          echo "Configuring Entra ID OAuth..."
+          echo "Configuring Authentik OIDC..."
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "
-            docker exec -u www-data $CONTAINER php occ user_oidc:provider 'Entra ID' \
-              --clientid='${{ vars.ENTRA_CLIENT_ID }}' \
-              --clientsecret='${{ secrets.entra_client_secret }}' \
-              --discoveryuri='https://login.microsoftonline.com/${{ vars.ENTRA_TENANT_ID }}/v2.0/.well-known/openid-configuration'
+            docker exec -u www-data $CONTAINER php occ user_oidc:provider 'Authentik' \
+              --clientid='${{ vars.AUTHENTIK_CLIENT_ID }}' \
+              --clientsecret='${{ secrets.authentik_client_secret }}' \
+              --discoveryuri='${{ vars.AUTHENTIK_DISCOVERY_URL }}' \
+              --mapping-uid='preferred_username' \
+              --mapping-email='email' \
+              --mapping-displayname='name' \
+              --unique-uid=1
           "
           
           echo "Nextcloud configuration complete!"

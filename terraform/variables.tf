@@ -79,3 +79,20 @@ variable "git_sha" {
   type        = string
   default     = ""
 }
+
+variable "authentik_client_id" {
+  description = "OIDC Client ID for Authentik authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "authentik_client_secret" {
+  description = "OIDC Client Secret for Authentik authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "authentik_discovery_url" {
+  description = "Authentik OIDC discovery URL"
+  type        = string
+}

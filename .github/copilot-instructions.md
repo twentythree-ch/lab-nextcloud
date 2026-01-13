@@ -23,7 +23,8 @@ Architecture & important patterns
 Key operational details agents must respect
 - Cloudflare Tunnel must be configured to target the Caddy container IP (example in README: `172.25.0.4:80`). Using `caddy:80` causes port/redirect issues. If you change networks or compose ordering, update the README and any automation that computes the IP.
 - Volumes are bind-mounted to `/data/lab-nextcloud-{environment}/*`. Any automation that migrates or backs up data should use these host paths.
-- Environment variables (`NEXTCLOUD_DOMAIN`, `DB_PASSWORD`, `REDIS_PASSWORD`, `CLOUDFLARE_TUNNEL_TOKEN`, `DATA_PATH`) are passed via Terraform to Portainer. Always reference `terraform/main.tf` and `terraform/variables.tf` when adding/removing envs.
+- Environment variables (`NEXTCLOUD_DOMAIN`, `DB_PASSWORD`, `REDIS_PASSWORD`, `CLOUDFLARE_TUNNEL_TOKEN`, `DATA_PATH`, `AUTHENTIK_CLIENT_ID`, `AUTHENTIK_CLIENT_SECRET`, `AUTHENTIK_DISCOVERY_URL`) are passed via Terraform to Portainer. Always reference `terraform/main.tf` and `terraform/variables.tf` when adding/removing envs.
+- OIDC authentication uses the `user_oidc` Nextcloud app with Authentik. The OIDC environment variables are available for automation but provider configuration is done via `occ user_oidc:provider:create` command after deployment.
 - `trusted_proxies` is set to `caddy` in `docker/nextcloud-config.php` and via env in the compose. If renaming the proxy, update both places.
 
 Developer workflows & useful commands
