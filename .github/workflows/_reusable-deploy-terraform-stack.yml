@@ -236,7 +236,7 @@ jobs:
               --discoveryuri='${{ vars.AUTHENTIK_DISCOVERY_URL }}' \
               --mapping-uid='preferred_username' \
               --mapping-email='email' \
-              --mapping-displayname='name' \
+              --mapping-display-name='name' \
               --unique-uid=1
           "
           
