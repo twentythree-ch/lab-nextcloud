@@ -105,15 +105,71 @@ sudo docker compose up -d
 
 4. Install NetBird (for remote mesh access)
 
-Follow official NetBird install instructions; example using their APT repo:
+Install NetBird using the official APT repository:
 
 ```bash
-curl -fsSL https://repo.netbird.io/install.sh | sudo bash
+# add GPG key and repository
+curl -sSL https://pkgs.netbird.io/debian/public.key | sudo gpg --dearmor --output /usr/share/keyrings/netbird-archive-keyring.gpg
+echo 'deb [signed-by=/usr/share/keyrings/netbird-archive-keyring.gpg] https://pkgs.netbird.io/debian stable main' | sudo tee /etc/apt/sources.list.d/netbird.list
+
+# install NetBird CLI
+sudo apt-get update
+sudo apt-get install -y netbird
+
+# enable and start the service
 sudo systemctl enable --now netbird
-# then use `netbird join <your-join-key>` per NetBird instructions
 ```
 
-5. Create required Docker network and host directories for lab-nextcloud
+Join your NetBird network:
+
+```bash
+# Option 1: SSO login (opens browser)
+netbird up
+
+# Option 2: use a setup key (for headless servers)
+netbird up --setup-key <YOUR_SETUP_KEY>
+
+# check connection status
+netbird status
+```
+
+> See https://docs.netbird.io/get-started/install/linux for more options.
+
+5. Create deploy user for CI/CD access
+
+Create a restricted `deploy` user that GitHub Actions can use via SSH certificate to manage `/data`:
+
+```bash
+# create deploy user (no login shell, restricted)
+sudo useradd -r -m -d /home/deploy -s /bin/bash deploy
+
+# create .ssh directory for authorized keys / certificates
+sudo mkdir -p /home/deploy/.ssh
+sudo chmod 700 /home/deploy/.ssh
+sudo chown deploy:deploy /home/deploy/.ssh
+
+# add the deploy user's public key or certificate (paste your key here)
+echo "ssh-ed25519 AAAA... deploy-key" | sudo tee /home/deploy/.ssh/authorized_keys
+sudo chmod 600 /home/deploy/.ssh/authorized_keys
+sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
+```
+
+Grant the deploy user permission to manage `/data` only:
+
+```bash
+# give deploy user ownership of /data
+sudo mkdir -p /data
+sudo chown deploy:deploy /data
+sudo chmod 755 /data
+
+# allow deploy user to run specific commands via sudo (optional, for docker compose)
+echo 'deploy ALL=(ALL) NOPASSWD: /usr/bin/docker, /usr/bin/docker-compose, /usr/libexec/docker/cli-plugins/docker-compose' | sudo tee /etc/sudoers.d/deploy
+sudo chmod 440 /etc/sudoers.d/deploy
+```
+
+> **Note:** The deploy user can create directories, chmod, and chown within `/data`. For GitHub Actions, store the SSH private key as a repository secret and use it to connect via NetBird IP.
+
+6. Create required Docker network and host directories for lab-nextcloud
 
 The compose expects an `external-services` network to exist on the host and host data directories under `/data/lab-nextcloud-{environment}`.
 
@@ -124,7 +180,7 @@ sudo chown -R $USER: /data/lab-nextcloud-development
 sudo chmod -R 755 /data/lab-nextcloud-development
 ```
 
-6. Recommended optional installs
+7. Recommended optional installs
 
 - Terraform (if you plan to run Terraform locally for Portainer/stack deploys)
 - `cloudflared` (optional; the repo uses a cloudflared container image so host binary is not required)
