@@ -127,6 +127,20 @@ jobs:
           # Remove NetBird's broken SSH config if it exists
           sudo rm -f /etc/ssh/ssh_config.d/99-netbird.conf || true
 
+      - name: Verify connection and pause if required (5 min)
+        run: |
+          echo "NetBird status:"
+          sudo netbird status
+          echo "Runner IP:"
+          curl -s ifconfig.me || true
+          echo ""
+          ping -c 5 ${{ inputs.docker_host_ip }} || true
+
+          if [ "${{ runner.debug }}" = "1" ]; then
+            echo "Debug mode enabled. Sleeping for 5 minutes to allow manual inspection..."
+            sleep 300
+          fi
+
       - name: Prepare host directories on Docker host
         run: |
           echo "Creating data directories on Docker host if they don't exist..."
