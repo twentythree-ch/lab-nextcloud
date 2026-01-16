@@ -46,9 +46,9 @@ Log out and back in (or `newgrp docker`) to apply group changes.
 3. Install Portainer (recommended as a Docker Compose stack)
 
 ```bash
-# create Portainer data directory
-sudo mkdir -p /data/portainer
-sudo chmod 755 /data/portainer
+# create Portainer data directories
+sudo mkdir -p /data/portainer/{portainer_data,caddy/certs,caddy/caddy_data,caddy/caddy_config}
+sudo chmod -R 755 /data/portainer
 ```
 
 Create a `docker-compose.yml` for Portainer (e.g., in `/data/portainer/docker-compose.yml`):
@@ -60,11 +60,33 @@ services:
     container_name: portainer
     restart: always
     ports:
-      - "9000:9000"   # optional: remove if only accessing via tunnel
-      - "9443:9443"   # optional: remove if only accessing via tunnel
+      - "9000"
+      - "8000"
+      - "9443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /data/portainer:/data
+      - /data/portainer/portainer_data:/data
+    networks:
+      internal:
+
+  caddy:
+    image: caddy:alpine
+    container_name: portainer2-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /data/portainer/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /data/portainer/caddy/certs:/etc/caddy/certs:ro
+      - /data/portainer/caddy/caddy_data:/data
+      - /data/portainer/caddy/caddy_config:/config
+    networks:
+      internal:  # To communicate with portainer
+      external-services:
+        ipv4_address: 172.25.0.5
+    depends_on:
+      - portainer
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -76,9 +98,41 @@ services:
       - TUNNEL_TRANSPORT_PROTOCOL=http2
     depends_on:
       - portainer
+    networks:
+      external-services:
+      internal:
+
+networks:
+  internal:
+    driver: bridge
+  external-services:
+    external: true
 ```
 
-> **Note:** Create a Cloudflare Tunnel in the Zero Trust dashboard and configure it to route traffic to `http://portainer:9000`. Set the `CLOUDFLARE_TUNNEL_TOKEN` in a `.env` file in the same directory or pass it directly.
+> **Note:** 
+> - The `external-services` network must exist on the host (created in step 6).
+> - Configure your Cloudflare Tunnel to route traffic to `http://172.25.0.5:80` (Caddy's IP).
+> - Create a Caddyfile at `/data/portainer/caddy/Caddyfile` to reverse proxy to Portainer.
+
+Example `/data/portainer/caddy/Caddyfile`:
+
+```caddyfile
+:80 {
+    reverse_proxy portainer:9000 {
+        # Required headers for Portainer auth to work behind proxy
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+
+        # WebSocket support (for Portainer real-time updates)
+        header_up Connection {>Connection}
+        header_up Upgrade {>Upgrade}
+    }
+}
+```
+
+> ⚠️ **Important:** The `X-Forwarded-Proto https` is critical — Cloudflare terminates TLS, so Portainer must know the original request was HTTPS for CSRF validation to pass.
 
 Create a `.env` file in `/data/portainer/.env`:
 
