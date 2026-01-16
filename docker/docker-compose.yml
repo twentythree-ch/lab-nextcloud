@@ -44,7 +44,6 @@ services:
       - redis
     networks:
       - internal
-      - external-services
 
   # Caddy reverse proxy
   caddy:
@@ -61,7 +60,6 @@ services:
       - nextcloud
     networks:
       - internal
-      - external-services
 
   # Cloudflare Tunnel
   cloudflared:
@@ -70,7 +68,6 @@ services:
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     networks:
       - internal
-      - external-services
     environment:
       - TUNNEL_TRANSPORT_PROTOCOL=http2
     depends_on:
@@ -104,8 +101,3 @@ volumes:
 
 networks:
   internal:
-    driver: bridge
-    internal: true
-  external-services:
-    external: true
-    name: external-services
