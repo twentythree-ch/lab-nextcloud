@@ -208,13 +208,16 @@ sudo chmod 600 /home/deploy/.ssh/authorized_keys
 sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
 ```
 
-Grant the deploy user permission to manage `/data` only:
+Grant the deploy user permission to manage `/data` and run Docker:
 
 ```bash
 # give deploy user ownership of /data
 sudo mkdir -p /data
 sudo chown deploy:deploy /data
 sudo chmod 755 /data
+
+# add deploy user to docker group (required for running docker commands)
+sudo usermod -aG docker deploy
 
 # allow deploy user to run specific commands via sudo (optional, for docker compose)
 echo 'deploy ALL=(ALL) NOPASSWD: /usr/bin/docker, /usr/bin/docker-compose, /usr/libexec/docker/cli-plugins/docker-compose' | sudo tee /etc/sudoers.d/deploy
