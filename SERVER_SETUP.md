@@ -31,17 +31,76 @@ sudo usermod -aG docker $USER
 
 Log out and back in (or `newgrp docker`) to apply group changes.
 
-3. Install Portainer (recommended as a Docker stack / container)
+> **Optional: Rootless mode**  
+> To run Docker as a non-privileged user without `sudo`, consider rootless mode:
+> ```bash
+> dockerd-rootless-setuptool.sh install
+> ```
+> See https://docs.docker.com/go/rootless/ for details.
+>
+> ⚠️ **Caveats for this stack:**
+> - The Docker socket moves to `$XDG_RUNTIME_DIR/docker.sock` (e.g., `/run/user/1000/docker.sock`), so Portainer's `-v /var/run/docker.sock:...` mount must be updated.
+> - Bind-mount paths outside your home (like `/data/lab-nextcloud-*`) may fail due to UID remapping. You'd need to relocate data under `~/` or configure subordinate UID/GID mappings.
+> - For this stack, **standard (rootful) Docker is simpler**; rootless adds security but requires extra configuration.
+
+3. Install Portainer (recommended as a Docker Compose stack)
 
 ```bash
-# create volumes
-sudo docker volume create portainer_data
+# create Portainer data directory
+sudo mkdir -p /data/portainer
+sudo chmod 755 /data/portainer
+```
 
-# recommended: run Portainer with Docker Compose or as a stack. Quick run:
-sudo docker run -d --name portainer --restart=always \
-  -p 9000:9000 -p 9443:9443 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v portainer_data:/data portainer/portainer-ce:latest
+Create a `docker-compose.yml` for Portainer (e.g., in `/data/portainer/docker-compose.yml`):
+
+```yaml
+services:
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: always
+    ports:
+      - "9000:9000"   # optional: remove if only accessing via tunnel
+      - "9443:9443"   # optional: remove if only accessing via tunnel
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /data/portainer:/data
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: portainer-tunnel
+    restart: always
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+      - TUNNEL_TRANSPORT_PROTOCOL=http2
+    depends_on:
+      - portainer
+```
+
+> **Note:** Create a Cloudflare Tunnel in the Zero Trust dashboard and configure it to route traffic to `http://portainer:9000`. Set the `CLOUDFLARE_TUNNEL_TOKEN` in a `.env` file in the same directory or pass it directly.
+
+Create a `.env` file in `/data/portainer/.env`:
+
+```bash
+# Cloudflare Tunnel token (from Zero Trust dashboard)
+CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoiYWJjZGVm...your-token-here
+```
+
+> ⚠️ **Security:** Restrict permissions and never commit secrets:
+> ```bash
+> sudo chmod 600 /data/portainer/.env
+> ```
+
+Then start the stack:
+
+```bash
+cd /data/portainer
+# Option 1: use .env file with CLOUDFLARE_TUNNEL_TOKEN=<your-token>
+sudo docker compose up -d
+
+# Option 2: pass token inline
+# CLOUDFLARE_TUNNEL_TOKEN=<your-token> sudo docker compose up -d
 ```
 
 4. Install NetBird (for remote mesh access)
