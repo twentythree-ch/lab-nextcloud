@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database for Nextcloud
   db:
@@ -24,7 +22,7 @@ services:
 
   # Nextcloud application
   nextcloud:
-    image: nextcloud:stable-fpm-alpine
+    image: nextcloud:32.0.3-fpm-alpine
     restart: unless-stopped
     volumes:
       - nextcloud_data:/var/www/html
@@ -46,14 +44,13 @@ services:
       - redis
     networks:
       - internal
-      - external-services
 
   # Caddy reverse proxy
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     volumes:
-      - /data/lab-nextcloud/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${DATA_PATH}/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
       - nextcloud_data:/var/www/html:ro
@@ -63,7 +60,6 @@ services:
       - nextcloud
     networks:
       - internal
-      - external-services
 
   # Cloudflare Tunnel
   cloudflared:
@@ -72,7 +68,6 @@ services:
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     networks:
       - internal
-      - external-services
     environment:
       - TUNNEL_TRANSPORT_PROTOCOL=http2
     depends_on:
@@ -84,30 +79,25 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /data/lab-nextcloud/db
+      device: ${DATA_PATH}/db
   nextcloud_data:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: /data/lab-nextcloud/nextcloud
+      device: ${DATA_PATH}/nextcloud
   caddy_data:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: /data/lab-nextcloud/caddy_data
+      device: ${DATA_PATH}/caddy_data
   caddy_config:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: /data/lab-nextcloud/caddy_config
+      device: ${DATA_PATH}/caddy_config
 
 networks:
   internal:
-    driver: bridge
-    internal: true
-  external-services:
-    external: true
-    name: external-services

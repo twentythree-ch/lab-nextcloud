@@ -1,0 +1,257 @@
+name: Deploy Stack via Terraform (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Deployment environment (development/production)'
+        required: true
+        type: string
+      stack_name:
+        description: 'Name of the Portainer stack'
+        required: true
+        type: string
+      compose_file_path:
+        description: 'Path to docker-compose file in repo'
+        required: true
+        type: string
+      git_branch:
+        description: 'Git branch to deploy'
+        required: true
+        type: string
+      tf_state_key:
+        description: 'Terraform state file key (e.g., lab-nextcloud/development.tfstate)'
+        required: true
+        type: string
+      docker_host_ip:
+        description: 'IP address of Docker host for SSH operations'
+        required: false
+        type: string
+        default: ${{ vars.DOCKER_HOST_IP }}
+      ssh_user:
+        description: 'SSH user for Docker host'
+        required: false
+        type: string
+        default: 'deploy'
+    secrets:
+      portainer_token:
+        description: 'Portainer API token'
+        required: true
+      gh_pat:
+        description: 'GitHub PAT for Portainer Git authentication'
+        required: true
+      cloudflare_tunnel_token:
+        description: 'Cloudflare Tunnel token'
+        required: true
+      db_password:
+        description: 'PostgreSQL password'
+        required: true
+      redis_password:
+        description: 'Redis password'
+        required: true
+      netbird_setup_key:
+        description: 'NetBird setup key for tunnel connectivity'
+        required: true
+      ssh_private_key:
+        description: 'SSH private key for host authentication'
+        required: true
+      authentik_client_secret:
+        description: 'Authentik OIDC client secret'
+        required: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+
+      - name: Terraform Init
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+          ARM_USE_OIDC: true
+        run: |
+          terraform init -input=false \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.AZURE_TF_STATE_CONTAINER }}" \
+            -backend-config="key=${{ inputs.tf_state_key }}" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true"
+
+      - name: Setup NetBird tunnel
+        run: |
+          echo "Installing NetBird..."
+          curl -fsSL https://pkgs.netbird.io/install.sh | sh
+          
+          echo "Starting NetBird service..."
+          sudo netbird service stop || true
+          sudo netbird service start
+          sleep 3
+          
+          echo "Connecting to NetBird network..."
+          sudo netbird up --setup-key "${{ secrets.netbird_setup_key }}"
+          
+          echo "Waiting for connection..."
+          sleep 5
+          
+          echo "NetBird status:"
+          sudo netbird status
+
+      - name: Setup SSH key for Docker host
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ssh_private_key }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          
+          # Remove NetBird's broken SSH config if it exists
+          sudo rm -f /etc/ssh/ssh_config.d/99-netbird.conf || true
+
+      - name: Verify connection and pause if required (5 min)
+        run: |
+          echo "NetBird status:"
+          sudo netbird status
+          echo "Runner IP:"
+          curl -s ifconfig.me || true
+          echo ""
+          ping -c 5 ${{ inputs.docker_host_ip }} || true
+
+          if [ "${{ runner.debug }}" = "1" ]; then
+            echo "Debug mode enabled. Sleeping for 5 minutes to allow manual inspection..."
+            sleep 300
+          fi
+
+      - name: Prepare host directories on Docker host
+        run: |
+          echo "Creating data directories on Docker host if they don't exist..."
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} '
+            BASE_PATH="/data/${{ inputs.stack_name }}"
+            for dir in db nextcloud caddy_data caddy_config; do
+              if [ ! -d "$BASE_PATH/$dir" ]; then
+                echo "Creating $BASE_PATH/$dir..."
+                mkdir -p "$BASE_PATH/$dir"
+                chmod 755 "$BASE_PATH/$dir"
+              else
+                echo "Directory $BASE_PATH/$dir already exists, skipping..."
+              fi
+            done
+          '
+
+      - name: Copy configuration files to Docker host
+        run: |
+          echo "Copying Caddyfile..."
+          scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null docker/Caddyfile ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/Caddyfile
+          
+          echo "Copying nextcloud-config.php..."
+          # Update domain in config before copying
+          sed "s|cloud.vansummeren.ch|${{ vars.NEXTCLOUD_DOMAIN }}|g" docker/nextcloud-config.php > /tmp/nextcloud-config.php
+          scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null /tmp/nextcloud-config.php ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }}:/data/${{ inputs.stack_name }}/nextcloud-config.php
+          
+          echo "Setting permissions..."
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "chmod 644 /data/${{ inputs.stack_name }}/{Caddyfile,nextcloud-config.php}"
+
+      - name: Terraform Plan
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+          ARM_USE_OIDC: true
+        run: |
+          terraform plan -input=false \
+            -var="environment=${{ inputs.environment }}" \
+            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
+            -var="portainer_token=${{ secrets.portainer_token }}" \
+            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
+            -var="stack_name=${{ inputs.stack_name }}" \
+            -var="compose_file_path=${{ inputs.compose_file_path }}" \
+            -var="git_branch=${{ inputs.git_branch }}" \
+            -var="git_sha=${{ github.sha }}" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="github_pat=${{ secrets.gh_pat }}" \
+            -var="cloudflare_tunnel_token=${{ secrets.cloudflare_tunnel_token }}" \
+            -var="db_password=${{ secrets.db_password }}" \
+            -var="redis_password=${{ secrets.redis_password }}" \
+            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}" \
+            -var="authentik_client_id=${{ vars.AUTHENTIK_CLIENT_ID }}" \
+            -var="authentik_client_secret=${{ secrets.authentik_client_secret }}" \
+            -var="authentik_discovery_url=${{ vars.AUTHENTIK_DISCOVERY_URL }}"
+
+      - name: Terraform Apply
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+          ARM_USE_OIDC: true
+        run: |
+          terraform apply -input=false -auto-approve \
+            -var="environment=${{ inputs.environment }}" \
+            -var="portainer_url=${{ vars.PORTAINER_URL }}" \
+            -var="portainer_token=${{ secrets.portainer_token }}" \
+            -var="portainer_endpoint_id=${{ vars.PORTAINER_ENDPOINT_ID }}" \
+            -var="stack_name=${{ inputs.stack_name }}" \
+            -var="compose_file_path=${{ inputs.compose_file_path }}" \
+            -var="git_branch=${{ inputs.git_branch }}" \
+            -var="git_sha=${{ github.sha }}" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="github_username=${{ github.repository_owner }}" \
+            -var="github_pat=${{ secrets.gh_pat }}" \
+            -var="cloudflare_tunnel_token=${{ secrets.cloudflare_tunnel_token }}" \
+            -var="db_password=${{ secrets.db_password }}" \
+            -var="redis_password=${{ secrets.redis_password }}" \
+            -var="nextcloud_domain=${{ vars.NEXTCLOUD_DOMAIN }}" \
+            -var="authentik_client_id=${{ vars.AUTHENTIK_CLIENT_ID }}" \
+            -var="authentik_client_secret=${{ secrets.authentik_client_secret }}" \
+            -var="authentik_discovery_url=${{ vars.AUTHENTIK_DISCOVERY_URL }}"
+
+      - name: Configure Nextcloud apps and OAuth
+        if: ${{ vars.AUTHENTIK_CLIENT_ID != '' }}
+        run: |
+          echo "Waiting for Nextcloud to be ready..."
+          sleep 30
+          
+          CONTAINER="${{ inputs.stack_name }}-nextcloud-1"
+          
+          echo "Installing Nextcloud apps..."
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "
+            docker exec -u www-data $CONTAINER php occ app:install user_oidc || true
+            docker exec -u www-data $CONTAINER php occ app:install calendar || true
+            docker exec -u www-data $CONTAINER php occ app:install contacts || true
+            docker exec -u www-data $CONTAINER php occ app:install tasks || true
+          "
+          
+          echo "Configuring Authentik OIDC..."
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ inputs.ssh_user }}@${{ inputs.docker_host_ip }} "
+            docker exec -u www-data $CONTAINER php occ user_oidc:provider 'Authentik' \
+              --clientid='${{ vars.AUTHENTIK_CLIENT_ID }}' \
+              --clientsecret='${{ secrets.authentik_client_secret }}' \
+              --discoveryuri='${{ vars.AUTHENTIK_DISCOVERY_URL }}' \
+              --mapping-uid='preferred_username' \
+              --mapping-email='email' \
+              --mapping-display-name='name' \
+              --unique-uid=1
+          "
+          
+          echo "Nextcloud configuration complete!"

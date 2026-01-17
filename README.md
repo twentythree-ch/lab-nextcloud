@@ -1,6 +1,6 @@
 # Nextcloud with Cloudflare Tunnel - Portainer Stack
 
-This repository contains a Docker Compose stack for running Nextcloud with a Cloudflare Tunnel, designed to be deployed via Portainer.
+This repository contains a Docker Compose stack for running Nextcloud with a Cloudflare Tunnel, designed to be deployed via Portainer with automated GitHub Actions CI/CD using Terraform.
 
 ## Architecture
 
@@ -10,10 +10,164 @@ This repository contains a Docker Compose stack for running Nextcloud with a Clo
 - **Caddy**: Reverse proxy and web server
 - **Cloudflared**: Cloudflare Tunnel for secure external access
 
+## Deployment Options
+
+This stack supports two deployment methods:
+
+1. **Automated CI/CD (Recommended)**: Push to `develop` or `main` branch triggers automatic deployment via GitHub Actions with Terraform
+2. **Manual Portainer**: Deploy directly through Portainer UI
+
 ## Network Configuration
 
 - **internal**: Internal network for communication between services (isolated)
 - **external-services**: Your existing bridge network (172.25.0.0/24) for outbound connectivity
+
+## GitHub Actions CI/CD Setup
+
+The deployment uses **Terraform** with the **Portainer provider** to manage stacks declaratively. This provides:
+- Infrastructure as Code (IaC) for reproducible deployments
+- State management via Azure Blob Storage
+- Automatic drift detection and remediation
+- Git commit-based change detection
+
+### Architecture
+
+```
+GitHub Actions
+    │
+    ├── Azure OIDC Login (for Terraform state backend)
+    │
+    ├── Terraform Init (Azure Blob Storage backend)
+    │
+    ├── NetBird Tunnel (secure connectivity to Portainer)
+    │
+    ├── Terraform Plan (detect changes)
+    │
+    └── Terraform Apply (deploy via Portainer API)
+```
+
+### Required Secrets and Variables
+
+Configure the following in your GitHub repository:
+
+#### Organization/Repository Secrets
+
+- `NETBIRD_SETUP_KEY` - NetBird tunnel connection key for secure access to Portainer
+- `PORTAINER_TOKEN` - API token for Portainer access
+- `GH_PAT` - GitHub Personal Access Token for Portainer Git integration
+
+#### Organization/Repository Variables
+
+- `PORTAINER_URL` - Portainer URL accessible via NetBird (e.g., `https://192.168.11.2:9443`)
+- `PORTAINER_ENDPOINT_ID` - Portainer endpoint ID (typically `2`)
+- `ARM_CLIENT_ID` - Azure AD application client ID for OIDC
+- `ARM_TENANT_ID` - Azure AD tenant ID
+- `ARM_SUBSCRIPTION_ID` - Azure subscription ID
+- `AZURE_TF_STATE_RG` - Resource group for Terraform state storage
+- `AZURE_TF_STATE_ACCOUNT` - Azure Storage account name
+- `AZURE_TF_STATE_CONTAINER` - Blob container name for Terraform state
+
+#### Environment-Level Secrets
+Configure these separately for each environment (`development` and `production`):
+
+**Settings → Environments → [environment name] → Add secret**
+
+- `CLOUDFLARE_TUNNEL_TOKEN` - Cloudflare Tunnel token (different per environment)
+- `DB_PASSWORD` - PostgreSQL password (different per environment)
+- `REDIS_PASSWORD` - Redis password (different per environment)
+- `AUTHENTIK_CLIENT_ID` - Authentik OIDC application client ID (different per environment)
+- `AUTHENTIK_CLIENT_SECRET` - Authentik OIDC application client secret (different per environment)
+
+#### Environment-Level Variables
+
+- `NEXTCLOUD_DOMAIN` - Nextcloud domain name (different per environment)
+- `AUTHENTIK_DISCOVERY_URL` - Authentik OIDC discovery URL (e.g., `https://auth.vansummeren.ch/application/o/nextcloud/.well-known/openid-configuration`)
+
+#### Environment Protection Rules
+
+**Production environment** (Settings → Environments → production):
+- ✅ Enable **Required reviewers** and add approvers
+- ✅ Optionally set **Wait timer** for additional safety
+
+**Development environment**: No protection rules needed for automatic deployment
+
+### Azure OIDC Setup
+
+For Terraform state management, configure Azure OIDC federation:
+
+1. Create an Azure AD App Registration
+2. Add federated credentials for GitHub Actions:
+   - Entity type: Environment
+   - Organization: your-org
+   - Repository: your-repo
+   - Environment: development (and production separately)
+3. Grant **Storage Blob Data Contributor** role on the storage account
+
+### Deployment Workflow
+
+The GitHub Actions workflow automatically deploys based on branch:
+
+- **Push to `develop`** → Deploys to `development` environment
+- **Push to `main`** → Deploys to `production` environment (requires approval)
+- **Manual dispatch** → Choose specific environment via Actions tab
+
+**Stack naming:**
+- Development: `lab-nextcloud-development`
+- Production: `lab-nextcloud-production`
+
+**Data directories on host:**
+- Development: `/data/lab-nextcloud-development/`
+- Production: `/data/lab-nextcloud-production/`
+
+### Docker Host Configuration
+
+The Docker host must be properly configured before automated deployments:
+
+#### Required Docker Networks
+
+Create the `external-services` network (if not already exists):
+
+```bash
+docker network create --driver bridge --subnet 172.25.0.0/24 external-services
+```
+
+Verify it exists:
+```bash
+docker network ls | grep external-services
+```
+
+#### Directory Permissions
+
+The Terraform/Portainer deployment expects data directories to exist. Create them:
+
+```bash
+# Development environment
+sudo mkdir -p /data/lab-nextcloud-development/{db,nextcloud,caddy_data,caddy_config}
+sudo chmod -R 755 /data/lab-nextcloud-development
+
+# Production environment
+sudo mkdir -p /data/lab-nextcloud-production/{db,nextcloud,caddy_data,caddy_config}
+sudo chmod -R 755 /data/lab-nextcloud-production
+```
+
+#### NetBird Access
+
+The Docker host must be:
+- ✅ Connected to the same NetBird network as GitHub Actions
+- ✅ Reachable via the configured Portainer URL through NetBird tunnel
+
+#### Portainer Configuration
+
+Ensure Portainer:
+- ✅ Is accessible at the configured `PORTAINER_URL`
+- ✅ Has API access enabled
+- ✅ Has the correct endpoint ID (typically `2`, stored in `PORTAINER_ENDPOINT_ID`)
+- ✅ Can pull from GitHub (requires `GH_PAT` with repo read access)
+
+Test Portainer API access:
+```bash
+curl -k -H "X-API-Key: YOUR_TOKEN" https://portainer-url:9443/api/endpoints
+```
 
 ## Prerequisites
 
@@ -21,28 +175,34 @@ This repository contains a Docker Compose stack for running Nextcloud with a Clo
 2. Existing `external-services` network (already created on your host)
 3. Cloudflare account with a domain configured
 4. Cloudflare Tunnel created
-5. Create the data directory on your host:
+5. Azure subscription with Storage Account for Terraform state
+6. NetBird network for secure connectivity
+7. Create the data directory on your host:
    ```bash
    mkdir -p /data/lab-nextcloud/{db,nextcloud,caddy_data,caddy_config}
    chmod -R 755 /data/lab-nextcloud
    ```
-6. Copy the `Caddyfile` to your host:
-   ```bash
-   # Download or copy the Caddyfile from your repo to:
-   /data/lab-nextcloud/Caddyfile
-   chmod 644 /data/lab-nextcloud/Caddyfile
-   ```
-7. Copy the `nextcloud-config.php` to your host:
-   ```bash
-   # Download or copy the nextcloud-config.php from your repo
-   # Make sure to replace 'cloud.vansummeren.ch' with YOUR domain
-   /data/lab-nextcloud/nextcloud-config.php
-   chmod 644 /data/lab-nextcloud/nextcloud-config.php
-   ```
 
 ## Setup Instructions
 
-### 5. Configure Cloudflare Tunnel
+### Automated Deployment (GitHub Actions with Terraform)
+
+Once secrets and variables are configured (see "GitHub Actions CI/CD Setup" above):
+
+1. **Initial setup**: Ensure Docker host has `/data` directory and proper permissions
+2. **Commit and push** to `develop` branch → auto-deploys to development
+3. **Merge to `main`** → triggers production deployment (requires approval)
+4. **Monitor**: Check Actions tab for deployment status
+
+The Terraform workflow automatically:
+- Connects via NetBird tunnel to Portainer
+- Creates or updates Portainer stack from Git repository
+- Passes environment variables securely
+- Detects changes via git commit SHA and triggers updates
+
+### Manual Deployment via Portainer
+
+#### 5. Configure Cloudflare Tunnel
 
 **IMPORTANT**: Use the IP address of the Caddy container, NOT the hostname, to avoid port resolution issues.
 
@@ -57,7 +217,7 @@ This repository contains a Docker Compose stack for running Nextcloud with a Clo
    
    **Why use IP instead of hostname?** Using `caddy:80` can cause Cloudflare Tunnel to incorrectly resolve ports, leading to redirect issues. Using the IP address directly avoids this problem.
 
-### 2. Prepare Your Repository
+#### 2. Prepare Your Repository
 
 1. Create a new GitHub repository
 2. Add these files to the repository:
@@ -84,7 +244,7 @@ Edit `.env` with your values:
 
 **Security Note**: Add `.env` to `.gitignore` to prevent committing secrets!
 
-### 4. Deploy with Portainer
+#### 4. Deploy with Portainer
 
 #### Option A: Deploy from Git Repository
 
@@ -98,7 +258,7 @@ Edit `.env` with your values:
    - Or use "Load variables from .env file" if you have the `.env` file
 7. Deploy the stack
 
-#### Option B: Deploy from Web Editor
+##### Option B: Deploy from Web Editor
 
 1. In Portainer, go to **Stacks** > **Add stack**
 2. Choose **Web editor**
@@ -106,14 +266,14 @@ Edit `.env` with your values:
 4. Add environment variables in the UI
 5. Deploy the stack
 
-### 5. Initial Nextcloud Setup
+#### 5. Initial Nextcloud Setup
 
 1. Wait for all containers to start (check logs in Portainer)
 2. Access Nextcloud through your domain (e.g., https://cloud.example.com)
 3. Create an admin account on first access
 4. Nextcloud will automatically configure itself with PostgreSQL and Redis
 
-### 6. Post-Installation Configuration
+#### 6. Post-Installation Configuration
 
 After initial setup, you may want to configure:
 
@@ -126,19 +286,27 @@ After initial setup, you may want to configure:
 
 ```
 your-repo/
-├── docker-compose.yml       # Main Docker Compose configuration
-├── Caddyfile               # Caddy reverse proxy configuration (copy to /data/lab-nextcloud/)
-├── nextcloud-config.php    # Nextcloud pre-config (copy to /data/lab-nextcloud/)
-├── .env.template           # Template for environment variables
-├── .gitignore              # Git ignore file (include .env)
-└── README.md               # This file
+├── docker/
+│   ├── docker-compose.yml       # Main Docker Compose configuration
+│   ├── Caddyfile                # Caddy reverse proxy configuration
+│   └── nextcloud-config.php     # Nextcloud pre-config
+├── terraform/
+│   ├── main.tf                  # Portainer stack resource definition
+│   ├── variables.tf             # Terraform variables
+│   └── README.md                # Terraform-specific documentation
+├── .github/
+│   └── workflows/
+│       ├── deploy.yml                    # Main deployment orchestrator
+│       ├── deploy-terraform-stack.yml    # Reusable Terraform workflow
+│       └── deploy-portainer-stack.yml    # Wrapper (backwards compat)
+├── .env.template                # Template for environment variables
+├── .gitignore                   # Git ignore file (include .env)
+└── README.md                    # This file
 ```
 
 **Host system:**
 ```
-/data/lab-nextcloud/
-├── Caddyfile               # Copy from repo
-├── nextcloud-config.php    # Copy from repo (update domain!)
+/data/lab-nextcloud-{environment}/
 ├── db/                     # PostgreSQL data
 ├── nextcloud/              # Nextcloud files
 ├── caddy_data/             # Caddy certificates
@@ -255,25 +423,83 @@ You can restrict access to your Nextcloud (and other services) to specific count
 
 **Important**: Test the rule from an allowed country first to avoid locking yourself out!
 
-### SAML Authentication with Microsoft Entra ID
+### OIDC Authentication with Authentik
 
-The stack supports SAML SSO with Microsoft Entra ID (Azure AD). To configure:
+The stack supports Single Sign-On (SSO) via OpenID Connect with Authentik. This is the recommended authentication method for centralized identity management.
 
-1. **Install SAML app in Nextcloud**:
-   - Log in as admin → Apps → Search for "SSO & SAML authentication"
-   - Download and enable
+#### 1. Create Application in Authentik
 
-2. **Configure in Azure/Entra ID**:
-   - Create Enterprise Application (Non-gallery)
-   - Set up SAML with:
-     - Entity ID: `https://your-domain.com/apps/user_saml/saml/metadata`
-     - Reply URL: `https://your-domain.com/apps/user_saml/saml/acs`
-     - Sign-on URL: `https://your-domain.com`
+1. Go to **Authentik Admin** → **Applications** → **Create**
+2. Configure the application:
+   - **Name**: `Nextcloud`
+   - **Slug**: `nextcloud`
+   - **Provider**: Create a new OAuth2/OpenID Provider (see step 2)
+3. After creation, the discovery URL will be:
+   - `https://YOUR_AUTHENTIK_DOMAIN/application/o/nextcloud/.well-known/openid-configuration`
 
-3. **Configure in Nextcloud**:
-   - Settings → SSO & SAML authentication
-   - Add identity provider with Azure metadata
-   - Map attributes (email, displayname, uid)
+#### 2. Create OAuth2/OpenID Provider
+
+1. Go to **Providers** → **Create** → **OAuth2/OpenID Provider**
+2. Configure:
+   - **Name**: `Nextcloud`
+   - **Authorization flow**: Select your authorization flow
+   - **Client type**: Confidential
+   - **Client ID**: Auto-generated → use as `AUTHENTIK_CLIENT_ID`
+   - **Client Secret**: Auto-generated → use as `AUTHENTIK_CLIENT_SECRET`
+   - **Redirect URIs**: `https://YOUR_NEXTCLOUD_DOMAIN/apps/user_oidc/code`
+3. Under **Advanced protocol settings**:
+   - **Scopes**: `openid`, `profile`, `email`
+   - **Subject mode**: Based on user's username (or email)
+
+#### 3. Install and Configure the OIDC App
+
+After stack deployment, install the `user_oidc` app:
+
+```bash
+# Enable the app
+docker exec -u www-data <nextcloud-container> php occ app:enable user_oidc
+
+# Add the Authentik provider
+docker exec -u www-data <nextcloud-container> php occ user_oidc:provider:create "Authentik" \
+  --clientid="YOUR_CLIENT_ID" \
+  --clientsecret="YOUR_CLIENT_SECRET" \
+  --discoveryuri="https://auth.vansummeren.ch/application/o/nextcloud/.well-known/openid-configuration" \
+  --mapping-uid="preferred_username" \
+  --mapping-email="email" \
+  --mapping-displayname="name" \
+  --unique-uid=1 \
+  --check-bearer=0
+```
+
+#### 4. Configuration Options
+
+| Setting | Recommended Value | Notes |
+|---------|------------------|-------|
+| `mapping-uid` | `preferred_username` | Maps to Authentik username |
+| `mapping-email` | `email` | Maps to user email |
+| `mapping-displayname` | `name` | Maps to user display name |
+| `unique-uid` | `1` | Prevents username collisions |
+| `check-bearer` | `0` | Set to `1` if using API access with tokens |
+
+#### 5. Optional: Disable Password Login
+
+To enforce OIDC-only authentication:
+
+```bash
+docker exec -u www-data <nextcloud-container> php occ config:app:set user_oidc allow_multiple_user_backends --value=0
+```
+
+**Warning**: Ensure OIDC is working before disabling password login!
+
+#### Environment Variables Reference
+
+The following environment variables are passed to the stack for OIDC configuration:
+
+| Variable | Description | Source |
+|----------|-------------|--------|
+| `AUTHENTIK_CLIENT_ID` | Authentik OIDC Application Client ID | GitHub Environment Secret |
+| `AUTHENTIK_CLIENT_SECRET` | Authentik OIDC Application Client Secret | GitHub Environment Secret |
+| `AUTHENTIK_DISCOVERY_URL` | Authentik OIDC Discovery URL | GitHub Environment Variable |
 
 ### Group Folders
 
