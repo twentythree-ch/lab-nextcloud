@@ -9,6 +9,10 @@ terraform {
       source  = "hashicorp/null"
       version = ">= 3.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.0"
+    }
   }
 
   backend "azurerm" {
@@ -89,8 +93,23 @@ resource "portainer_stack" "app" {
     value = var.authentik_discovery_url
   }
 
+  env {
+    name  = "NEXTCLOUD_ADMIN_PASSWORD"
+    value = random_password.nextcloud_admin_password.result
+  }
+
+  env {
+    name  = "NEXTCLOUD_ADMIN_USERNAME"
+    value =  "nextadmin"
+  }
+
   # Force update when git commit changes
   depends_on = [null_resource.git_change_trigger]
+}
+
+resource "random_password" "nextcloud_admin_password" {
+  length  = 20
+  special = true
 }
 
 output "stack_id" {
