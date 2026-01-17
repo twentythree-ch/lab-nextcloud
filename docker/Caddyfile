@@ -7,6 +7,12 @@
         env front_controller_active true
         env modHeadersAvailable true
         trusted_proxies private_ranges
+
+        # Forward real client info to PHP
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+        header_up X-Real-IP {remote_host}
     }
 
     # File server for static files
