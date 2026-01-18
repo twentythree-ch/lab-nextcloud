@@ -110,6 +110,9 @@ resource "portainer_stack" "app" {
 resource "random_password" "nextcloud_admin_password" {
   length  = 20
   special = true
+  keepers = {
+    stack_name = var.stack_name # Regenerate if stack name changes
+  }
 }
 
 output "stack_id" {
