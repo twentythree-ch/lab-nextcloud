@@ -22,7 +22,7 @@ services:
 
   # Nextcloud application
   nextcloud:
-    image: nextcloud:32.0.5-fpm-alpine
+    image: nextcloud:33.0.0-fpm-alpine
     restart: unless-stopped
     volumes:
       - nextcloud_data:/var/www/html
